@@ -1,9 +1,11 @@
 name: Build desktop apps
+
 on:
   workflow_dispatch:
   push:
     tags:
       - 'v*'
+
 jobs:
   build:
     strategy:
@@ -14,14 +16,32 @@ jobs:
             target: windows-x64
           - os: macos-15
             target: macos-arm64
+
     runs-on: ${{ matrix.os }}
+
     steps:
       - uses: actions/checkout@v4
+
+      # WINDOWS
       - name: Install Hutch (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           & ([scriptblock]::Create((irm https://hutch.blackboard.sh/hutch/install.ps1)))
+
+      - name: Add Hutch to PATH (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $hutchBin = Join-Path $HOME ".hutch\bin"
+
+          if (-not (Test-Path (Join-Path $hutchBin "hutch.exe"))) {
+            throw "Hutch executable not found in $hutchBin"
+          }
+
+          Add-Content -Path $env:GITHUB_PATH -Value $hutchBin
+
+      # MACOS
       - name: Install Hutch (macOS)
         if: runner.os == 'macOS'
         shell: bash
@@ -29,13 +49,27 @@ jobs:
           xcode-select -p
           brew install cmake
           curl -fsSL https://hutch.blackboard.sh/hutch/install.sh | sh
+
       - name: Add Hutch to PATH (macOS)
         if: runner.os == 'macOS'
         shell: bash
-        run: echo "$HOME/.hutch/bin" >> "$GITHUB_PATH"
+        run: |
+          echo "$HOME/.hutch/bin" >> "$GITHUB_PATH"
+
+      # VERIFY INSTALLATION
+      - name: Verify Hutch
+        shell: bash
+        run: |
+          command -v hutch
+          hutch --version
+
+      # BUILD
       - name: Build
         shell: bash
-        run: hutch electrobun build --env=stable
+        run: |
+          hutch electrobun build --env=stable
+
+      # UPLOAD
       - name: Upload output
         uses: actions/upload-artifact@v4
         with:
