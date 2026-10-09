@@ -1,0 +1,47 @@
+name: Build desktop apps
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: windows-x64
+          - os: macos-15
+            target: macos-arm64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Hutch (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          & ([scriptblock]::Create((irm https://hutch.blackboard.sh/hutch/install.ps1)))
+      - name: Install Hutch (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          xcode-select -p
+          brew install cmake
+          curl -fsSL https://hutch.blackboard.sh/hutch/install.sh | sh
+      - name: Add Hutch to PATH (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: echo "$HOME/.hutch/bin" >> "$GITHUB_PATH"
+      - name: Build
+        shell: bash
+        run: hutch electrobun build --env=stable
+      - name: Upload output
+        uses: actions/upload-artifact@v4
+        with:
+          name: foz-tarefas-${{ matrix.target }}
+          path: |
+            build/**
+            dist/**
+            artifacts/**
+          if-no-files-found: warn
