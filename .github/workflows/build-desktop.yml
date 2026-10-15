@@ -30,6 +30,9 @@ on:
           - windows
           - macos
 
+permissions:
+  contents: write
+
 jobs:
   build:
     strategy:
@@ -118,4 +121,75 @@ jobs:
             build/**
             dist/**
             artifacts/**
-          if-no-files-found: warn
+          if-no-files-found: error
+
+  publish:
+    name: Publish named release
+    needs: build
+    if: ${{ success() }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      APP_NAME: ${{ inputs.app_name }}
+      APP_URL: ${{ inputs.app_url }}
+      APP_ID: ${{ inputs.app_id }}
+      APP_VERSION: ${{ inputs.app_version }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: desktop-*-${{ github.run_id }}
+          path: release-files
+          merge-multiple: false
+
+      - name: Package downloads and write release notes
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import os
+          import pathlib
+          import re
+          import zipfile
+
+          root = pathlib.Path("release-files")
+          archives = pathlib.Path("release-packages")
+          archives.mkdir(exist_ok=True)
+          folders = [p for p in root.iterdir() if p.is_dir()]
+          if not folders:
+              raise SystemExit("No build artifacts found; refusing to publish an empty release")
+          slug = re.sub(r"[^a-z0-9-]+", "-", os.environ["APP_NAME"].lower()).strip("-")
+          for folder in folders:
+              files = [p for p in folder.rglob("*") if p.is_file()]
+              if not files:
+                  raise SystemExit(f"Empty artifact: {folder.name}")
+              target = folder.name.split("-")
+              platform = "windows-x64" if "windows-x64" in folder.name else "macos-arm64" if "macos-arm64" in folder.name else "desktop"
+              archive = archives / f"{slug}-v{os.environ['APP_VERSION']}-{platform}.zip"
+              with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as zf:
+                  for file in files:
+                      zf.write(file, file.relative_to(folder))
+          pathlib.Path("release-notes.md").write_text(
+              f"## {os.environ['APP_NAME']}\n\n"
+              f"**Version:** `{os.environ['APP_VERSION']}`  \n"
+              f"**App ID:** `{os.environ['APP_ID']}`  \n"
+              f"**Website:** {os.environ['APP_URL']}  \n"
+              f"**Build:** ${{{{ github.run_number }}}}\n\n"
+              "Download the archive for your operating system from **Assets** below.\n\n"
+              "> Builds may be unsigned. Verify them before external distribution.\n"
+          )
+          PY
+
+      - name: Publish GitHub Release
+        shell: bash
+        env:
+          GH_REPO: ${{ github.repository }}
+          BUILD_RUN: ${{ github.run_id }}
+        run: |
+          tag="build-${APP_ID}-v${APP_VERSION}-${BUILD_RUN}"
+          gh release create "$tag" release-packages/*.zip \
+            --target "${GITHUB_SHA}" \
+            --title "${APP_NAME} · v${APP_VERSION} · Build #${GITHUB_RUN_NUMBER}" \
+            --notes-file release-notes.md \
+            --latest=false
