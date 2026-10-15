@@ -60,8 +60,8 @@ jobs:
           app_id = ".".join(reversed(labels))
           version = f"1.0.{os.environ['RUN_NUMBER']}"
           with open(os.environ["GITHUB_OUTPUT"], "a") as output:
-              output.write(f"app_id={app_id}\\n")
-              output.write(f"app_version={version}\\n")
+              output.write(f"app_id={app_id}\n")
+              output.write(f"app_version={version}\n")
           print(f"App ID: {app_id}; version: {version}")
           PY
 
