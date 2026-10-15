@@ -203,7 +203,10 @@ jobs:
           root = pathlib.Path("release-files")
           archives = pathlib.Path("release-packages")
           archives.mkdir(exist_ok=True)
-          folders = [p for p in root.iterdir() if p.is_dir()]
+          folders = [p for p in root.iterdir() if p.is_dir()] if root.exists() else []
+          # download-artifact may place a single matched artifact directly in the destination.
+          if not folders and root.is_dir() and any(root.iterdir()):
+              folders = [root]
           if not folders:
               raise SystemExit("No build artifacts found; refusing to publish an empty release")
           slug = re.sub(r"[^a-z0-9-]+", "-", os.environ["APP_NAME"].lower()).strip("-")
@@ -211,7 +214,7 @@ jobs:
               files = [p for p in folder.rglob("*") if p.is_file()]
               if not files:
                   raise SystemExit(f"Empty artifact: {folder.name}")
-              platform = "windows-x64" if "windows-x64" in folder.name else "macos-arm64" if "macos-arm64" in folder.name else "desktop"
+              platform = "macos-arm64" if (folder / "macos-arm64.zip").is_file() else "windows-x64" if "windows-x64" in folder.name else "macos-arm64" if "macos-arm64" in folder.name else "windows-x64" if any(p.suffix.lower() == ".exe" for p in files) else "desktop"
               archive = archives / f"{slug}-v{os.environ['APP_VERSION']}-{platform}.zip"
               if platform == "macos-arm64":
                   source = folder / "macos-arm64.zip"
