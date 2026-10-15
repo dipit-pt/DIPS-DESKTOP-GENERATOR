@@ -22,12 +22,14 @@ on:
           - macos
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   prepare:
+    permissions:
+      contents: read
     name: Resolve application identity
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       app_id: ${{ steps.identity.outputs.app_id }}
       app_version: ${{ steps.identity.outputs.app_version }}
@@ -66,6 +68,8 @@ jobs:
           PY
 
   build:
+    permissions:
+      contents: read
     needs: prepare
     strategy:
       fail-fast: false
@@ -78,7 +82,7 @@ jobs:
       APP_ID: ${{ needs.prepare.outputs.app_id }}
       APP_VERSION: ${{ needs.prepare.outputs.app_version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Generate build-specific settings
         shell: bash
@@ -135,7 +139,7 @@ jobs:
         run: hutch electrobun build --env=stable
 
       - name: Upload output
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: desktop-${{ matrix.target }}-${{ github.run_id }}
           path: |
@@ -143,12 +147,13 @@ jobs:
             dist/**
             artifacts/**
           if-no-files-found: error
+          retention-days: 7
 
   publish:
     name: Publish named release
     needs: [prepare, build]
     if: ${{ success() }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     env:
@@ -159,7 +164,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
     steps:
       - name: Download build artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: desktop-*-${{ github.run_id }}
           path: release-files
