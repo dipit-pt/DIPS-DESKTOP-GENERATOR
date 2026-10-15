@@ -164,8 +164,7 @@ jobs:
               files = [p for p in folder.rglob("*") if p.is_file()]
               if not files:
                   raise SystemExit(f"Empty artifact: {folder.name}")
-              target = folder.name.split("-")
-              platform = "windows-x64" if "windows-x64" in folder.name else "macos-arm64" if "macos-arm64" in folder.name else "desktop"
+                  platform = "windows-x64" if "windows-x64" in folder.name else "macos-arm64" if "macos-arm64" in folder.name else "desktop"
               archive = archives / f"{slug}-v{os.environ['APP_VERSION']}-{platform}.zip"
               with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as zf:
                   for file in files:
@@ -175,7 +174,7 @@ jobs:
               f"**Version:** `{os.environ['APP_VERSION']}`  \n"
               f"**App ID:** `{os.environ['APP_ID']}`  \n"
               f"**Website:** {os.environ['APP_URL']}  \n"
-              f"**Build:** ${{{{ github.run_number }}}}\n\n"
+              f"**Build:** #{os.environ['GITHUB_RUN_NUMBER']}\n\n"
               "Download the archive for your operating system from **Assets** below.\n\n"
               "> Builds may be unsigned. Verify them before external distribution.\n"
           )
