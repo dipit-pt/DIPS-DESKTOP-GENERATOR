@@ -20,6 +20,8 @@ on:
           - both
           - windows
           - macos
+          - linux
+          - all
 
 permissions:
   contents: read
@@ -74,7 +76,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON(inputs.platform == 'windows' && '[{"os":"windows-latest","target":"windows-x64","platform":"windows"}]' || inputs.platform == 'macos' && '[{"os":"macos-15","target":"macos-arm64","platform":"macos"}]' || '[{"os":"windows-latest","target":"windows-x64","platform":"windows"},{"os":"macos-15","target":"macos-arm64","platform":"macos"}]') }}
+        include: ${{ fromJSON(inputs.platform == 'linux' && '[{"os":"ubuntu-24.04","target":"linux-x64","platform":"linux"}]' || inputs.platform == 'all' && '[{"os":"windows-latest","target":"windows-x64","platform":"windows"},{"os":"macos-15","target":"macos-arm64","platform":"macos"},{"os":"ubuntu-24.04","target":"linux-x64","platform":"linux"}]' || inputs.platform == 'windows' && '[{"os":"windows-latest","target":"windows-x64","platform":"windows"}]' || inputs.platform == 'macos' && '[{"os":"macos-15","target":"macos-arm64","platform":"macos"}]' || '[{"os":"windows-latest","target":"windows-x64","platform":"windows"},{"os":"macos-15","target":"macos-arm64","platform":"macos"}]') }}
     runs-on: ${{ matrix.os }}
     env:
       APP_NAME: ${{ inputs.app_name }}
@@ -128,6 +130,15 @@ jobs:
         run: |
           echo "$HOME/.hutch/bin" >> "$GITHUB_PATH"
 
+      - name: Install Hutch and desktop libraries (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libnotify-bin
+          curl -fsSL https://hutch.blackboard.sh/hutch/install.sh | sh
+          echo "$HOME/.hutch/bin" >> "$GITHUB_PATH"
+
       - name: Verify Hutch
         shell: bash
         run: |
@@ -165,8 +176,8 @@ jobs:
           name: desktop-${{ matrix.target }}-${{ github.run_id }}
           path: |
             ${{ runner.os == 'macOS' && 'release-ready/macos-arm64.zip' || 'build/**' }}
-            ${{ runner.os == 'Windows' && 'dist/**' || '' }}
-            ${{ runner.os == 'Windows' && 'artifacts/**' || '' }}
+            ${{ runner.os != 'macOS' && 'dist/**' || '' }}
+            ${{ runner.os != 'macOS' && 'artifacts/**' || '' }}
           if-no-files-found: error
           retention-days: 7
 
@@ -214,7 +225,15 @@ jobs:
               files = [p for p in folder.rglob("*") if p.is_file()]
               if not files:
                   raise SystemExit(f"Empty artifact: {folder.name}")
-              platform = "macos-arm64" if (folder / "macos-arm64.zip").is_file() else "windows-x64" if "windows-x64" in folder.name else "macos-arm64" if "macos-arm64" in folder.name else "windows-x64" if any(p.suffix.lower() == ".exe" for p in files) else "desktop"
+              if (folder / "macos-arm64.zip").is_file():
+                  platform = "macos-arm64"
+              else:
+                  platform = next((target for target in ("windows-x64", "linux-x64")
+                      if target in folder.name or any(target in str(p.relative_to(folder)) for p in files)), None)
+                  if platform is None and any(p.suffix.lower() == ".exe" for p in files):
+                      platform = "windows-x64"
+                  if platform is None:
+                      raise SystemExit(f"Cannot identify platform in {folder.name}")
               archive = archives / f"{slug}-v{os.environ['APP_VERSION']}-{platform}.zip"
               if platform == "macos-arm64":
                   source = folder / "macos-arm64.zip"

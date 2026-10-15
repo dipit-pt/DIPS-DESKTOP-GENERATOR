@@ -7,7 +7,8 @@ export default {
     version: process.env.APP_VERSION ?? "1.0.0",
   },
   build: {
-    mainProcess: "cottontail",
-    cottontail: { entrypoint: "src/bun/index.ts" },
+    mainProcess: "bun",
+    bun: { entrypoint: "src/bun/index.ts" },
+    views: { preload: { entrypoint: "src/preload/index.ts" } },
   },
 } satisfies ElectrobunConfig;
