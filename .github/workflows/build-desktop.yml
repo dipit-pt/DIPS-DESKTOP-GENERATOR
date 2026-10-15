@@ -11,15 +11,6 @@ on:
         description: Website URL (https://...)
         required: true
         type: string
-      app_id:
-        description: Unique application identifier (e.g. com.dipit.fozconstroi)
-        required: true
-        type: string
-      app_version:
-        description: Application version
-        required: true
-        default: '1.0.0'
-        type: string
       platform:
         description: Build platform
         required: true
@@ -34,7 +25,48 @@ permissions:
   contents: write
 
 jobs:
+  prepare:
+    name: Resolve application identity
+    runs-on: ubuntu-latest
+    outputs:
+      app_id: ${{ steps.identity.outputs.app_id }}
+      app_version: ${{ steps.identity.outputs.app_version }}
+    steps:
+      - name: Derive identifier and automatic version
+        id: identity
+        shell: bash
+        env:
+          APP_URL: ${{ inputs.app_url }}
+          RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          python3 - <<'PY'
+          import ipaddress
+          import os
+          from urllib.parse import urlsplit
+
+          url = urlsplit(os.environ["APP_URL"])
+          if url.scheme not in ("http", "https") or not url.hostname:
+              raise SystemExit("Please enter a valid HTTP(S) URL")
+          host = url.hostname.lower().rstrip(".")
+          try:
+              ipaddress.ip_address(host)
+              raise SystemExit("Use a domain name rather than an IP address")
+          except ValueError as exc:
+              if str(exc) == "Use a domain name rather than an IP address":
+                  raise
+          labels = host.split(".")
+          if len(labels) < 2 or any(not label or not label.replace("-", "").isalnum() or label[0] == "-" or label[-1] == "-" for label in labels):
+              raise SystemExit("Invalid domain name for application identifier")
+          app_id = ".".join(reversed(labels))
+          version = f"1.0.{os.environ['RUN_NUMBER']}"
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              output.write(f"app_id={app_id}\\n")
+              output.write(f"app_version={version}\\n")
+          print(f"App ID: {app_id}; version: {version}")
+          PY
+
   build:
+    needs: prepare
     strategy:
       fail-fast: false
       matrix:
@@ -43,8 +75,8 @@ jobs:
     env:
       APP_NAME: ${{ inputs.app_name }}
       APP_URL: ${{ inputs.app_url }}
-      APP_ID: ${{ inputs.app_id }}
-      APP_VERSION: ${{ inputs.app_version }}
+      APP_ID: ${{ needs.prepare.outputs.app_id }}
+      APP_VERSION: ${{ needs.prepare.outputs.app_version }}
     steps:
       - uses: actions/checkout@v4
 
@@ -114,7 +146,7 @@ jobs:
 
   publish:
     name: Publish named release
-    needs: build
+    needs: [prepare, build]
     if: ${{ success() }}
     runs-on: ubuntu-latest
     permissions:
@@ -122,8 +154,8 @@ jobs:
     env:
       APP_NAME: ${{ inputs.app_name }}
       APP_URL: ${{ inputs.app_url }}
-      APP_ID: ${{ inputs.app_id }}
-      APP_VERSION: ${{ inputs.app_version }}
+      APP_ID: ${{ needs.prepare.outputs.app_id }}
+      APP_VERSION: ${{ needs.prepare.outputs.app_version }}
       GH_TOKEN: ${{ github.token }}
     steps:
       - name: Download build artifacts
