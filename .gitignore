@@ -1,2 +1,21 @@
-/build
-/.hutch
+# Build output and tool caches
+/build/
+/dist/
+/artifacts/
+/.hutch/
+/.cottontail-tmp/
+/node_modules/
+
+# Generated installers
+*.dmg
+*.exe
+*.msi
+*.app/
+*.zip
+
+# Local environment and OS files
+.env
+.env.*
+!.env.example
+.DS_Store
+Thumbs.db
