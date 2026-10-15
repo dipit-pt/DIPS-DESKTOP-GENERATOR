@@ -138,14 +138,35 @@ jobs:
         shell: bash
         run: hutch electrobun build --env=stable
 
+      - name: Sign, verify and package macOS app
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-ready
+          app_path="$(find build dist artifacts -type d -name '*.app' -print -prune 2>/dev/null | head -n 1 || true)"
+          if [ -z "$app_path" ]; then
+            echo "::error::No macOS .app bundle found in build, dist or artifacts"
+            exit 1
+          fi
+          echo "Signing bundle: $app_path"
+          codesign --force --deep --sign - "$app_path"
+          codesign --verify --deep --strict --verbose=2 "$app_path"
+          ditto -c -k --sequesterRsrc --keepParent "$app_path" "release-ready/macos-arm64.zip"
+          mkdir -p verify-extracted
+          ditto -x -k "release-ready/macos-arm64.zip" verify-extracted
+          extracted="$(find verify-extracted -type d -name '*.app' -print -prune | head -n 1)"
+          test -n "$extracted"
+          codesign --verify --deep --strict --verbose=2 "$extracted"
+
       - name: Upload output
         uses: actions/upload-artifact@v7
         with:
           name: desktop-${{ matrix.target }}-${{ github.run_id }}
           path: |
-            build/**
-            dist/**
-            artifacts/**
+            ${{ runner.os == 'macOS' && 'release-ready/macos-arm64.zip' || 'build/**' }}
+            ${{ runner.os == 'Windows' && 'dist/**' || '' }}
+            ${{ runner.os == 'Windows' && 'artifacts/**' || '' }}
           if-no-files-found: error
           retention-days: 7
 
@@ -192,9 +213,16 @@ jobs:
                   raise SystemExit(f"Empty artifact: {folder.name}")
               platform = "windows-x64" if "windows-x64" in folder.name else "macos-arm64" if "macos-arm64" in folder.name else "desktop"
               archive = archives / f"{slug}-v{os.environ['APP_VERSION']}-{platform}.zip"
-              with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as zf:
-                  for file in files:
-                      zf.write(file, file.relative_to(folder))
+              if platform == "macos-arm64":
+                  source = folder / "macos-arm64.zip"
+                  if not source.is_file():
+                      raise SystemExit(f"Missing macOS ditto archive in {folder.name}")
+                  import shutil
+                  shutil.copy2(source, archive)
+              else:
+                  with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as zf:
+                      for file in files:
+                          zf.write(file, file.relative_to(folder))
           pathlib.Path("release-notes.md").write_text(
               f"## {os.environ['APP_NAME']}\n\n"
               f"**Version:** `{os.environ['APP_VERSION']}`  \n"
