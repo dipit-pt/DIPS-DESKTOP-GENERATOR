@@ -1,6 +1,8 @@
 # DIPS Desktop Generator
 
-**One codebase. Multiple branded desktop apps.**
+**One codebase. Every brand. Desktop builds on demand.**
+
+[![Desktop builds](https://github.com/dipit-pt/DIPS-DESKTOP-GENERATOR/actions/workflows/build-desktop.yml/badge.svg)](https://github.com/dipit-pt/DIPS-DESKTOP-GENERATOR/actions/workflows/build-desktop.yml) · [Browse releases](https://github.com/dipit-pt/DIPS-DESKTOP-GENERATOR/releases) · [Run a build](https://github.com/dipit-pt/DIPS-DESKTOP-GENERATOR/actions/workflows/build-desktop.yml)
 
 Build lightweight Windows and macOS desktop wrappers for your web applications using **Electrobun**, **Hutch**, and **GitHub Actions**. No per-client branches, no hardcoded production URLs, and no manual source edits for each release.
 
@@ -9,7 +11,8 @@ Build lightweight Windows and macOS desktop wrappers for your web applications u
 1. Open **Actions → Build desktop apps → Run workflow**.
 2. Select the **main** branch.
 3. Enter the app name, HTTPS URL, unique app identifier, version, and platform.
-4. Start the workflow and download the resulting artifacts from the run.
+4. Start the workflow. When both build and publish jobs succeed, find the named app under **Releases** on the right-hand side of the repository.
+5. Open the release and download the Windows or macOS ZIP from **Assets**.
 
 | Input | Example | Purpose |
 | --- | --- | --- |
@@ -20,6 +23,16 @@ Build lightweight Windows and macOS desktop wrappers for your web applications u
 | Platform | `both` | Windows, macOS, or both |
 
 > **Important:** Use a distinct app ID for each product. The URL and name are embedded at build time, not read from the user's machine.
+
+## Build gallery: GitHub Releases
+
+Every successful manual build publishes a **named GitHub Release** with the application name, version, website URL, build number, and downloadable platform archives. This makes the repository's **Releases** sidebar your build catalog.
+
+**Example:** `FozConstroi Tarefas · v1.0.0 · Build #12`
+
+Release tags include the app identifier and workflow run ID to avoid collisions across builds. Downloads remain accessible from [Releases](https://github.com/dipit-pt/DIPS-DESKTOP-GENERATOR/releases).
+
+> Releases are created only after a successful build. If the repository's Actions token cannot publish releases, set **Settings → Actions → General → Workflow permissions** to **Read and write permissions** (subject to organization policy).
 
 ## How it works
 
@@ -32,7 +45,9 @@ GitHub Actions inputs
          |
          +--> Hutch + Electrobun package the desktop app
          |
-         +--> Download Windows / macOS artifacts
+         +--> Upload CI artifacts
+         |
+         +--> Publish a named GitHub Release with download links
 ```
 
 The workflow generates `src/settings.ts` in the runner workspace. The generated file is **not committed**. Each workflow run starts from the same source branch.
@@ -68,7 +83,7 @@ For local testing, edit `src/settings.ts` or generate it yourself. The workflow 
 
 ## Notes
 
-- GitHub Actions artifacts are **build outputs**, not a signed production release by default.
+- GitHub Releases contain **build outputs**, not signed production releases by default.
 - Platform-specific builds run on their respective GitHub-hosted runners.
 - Do not commit generated installers, temporary build files, or credentials.
 - A single `main` branch is intended to serve all clients.
