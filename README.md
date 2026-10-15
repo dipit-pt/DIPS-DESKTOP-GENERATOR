@@ -10,7 +10,7 @@ Build lightweight Windows and macOS desktop wrappers for your web applications u
 
 1. Open **Actions → Build desktop apps → Run workflow**.
 2. Select the **main** branch.
-3. Enter the app name, HTTPS URL, unique app identifier, version, and platform.
+3. Enter only the **app name**, **website URL**, and **platform**. The identifier and version are generated automatically.
 4. Start the workflow. When both build and publish jobs succeed, find the named app under **Releases** on the right-hand side of the repository.
 5. Open the release and download the Windows or macOS ZIP from **Assets**.
 
@@ -18,11 +18,9 @@ Build lightweight Windows and macOS desktop wrappers for your web applications u
 | --- | --- | --- |
 | App name | `FozConstroi Tarefas` | Desktop window title and app name |
 | App URL | `https://tarefas.fozconstroi.com/` | Website loaded by the desktop window |
-| App ID | `com.dipit.fozconstroi.tarefas` | Unique installation identity |
-| Version | `1.0.0` | Application version |
 | Platform | `both` | Windows, macOS, or both |
 
-> **Important:** Use a distinct app ID for each product. The URL and name are embedded at build time, not read from the user's machine.
+> **Automatic identity:** The hostname is reversed to form the app ID: `tarefas.fozconstroi.com` → `com.fozconstroi.tarefas`. Paths and ports are ignored. Version is `1.0.<workflow run number>` and increments with every workflow run (across all apps). Builds using the same hostname share an app ID; use distinct subdomains for separate installable apps. The URL and name are embedded at build time.
 
 ## Build gallery: GitHub Releases
 
@@ -38,6 +36,8 @@ Release tags include the app identifier and workflow run ID to avoid collisions 
 
 ```text
 GitHub Actions inputs
+         |
+         +--> Derive reversed-domain ID + automatic version
          |
          +--> Generate src/settings.ts (build only)
          |
@@ -75,8 +75,8 @@ For local testing, edit `src/settings.ts` or generate it yourself. The workflow 
 ## Release checklist
 
 - [ ] Verify the destination URL uses HTTPS.
-- [ ] Use a stable, unique application ID.
-- [ ] Set the intended version.
+- [ ] Verify the hostname maps to the intended application identity.
+- [ ] Confirm the automatically assigned version.
 - [ ] Build for the desired operating systems.
 - [ ] Test installation, authentication, navigation, and external links.
 - [ ] Configure signing/notarization before distributing to end users.
