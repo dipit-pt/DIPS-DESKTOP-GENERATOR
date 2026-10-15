@@ -2,9 +2,33 @@ name: Build desktop apps
 
 on:
   workflow_dispatch:
-  push:
-    tags:
-      - 'v*'
+    inputs:
+      app_name:
+        description: Application name
+        required: true
+        type: string
+      app_url:
+        description: Website URL (https://...)
+        required: true
+        type: string
+      app_id:
+        description: Unique application identifier (e.g. com.dipit.fozconstroi)
+        required: true
+        type: string
+      app_version:
+        description: Application version
+        required: true
+        default: '1.0.0'
+        type: string
+      platform:
+        description: Build platform
+        required: true
+        default: both
+        type: choice
+        options:
+          - both
+          - windows
+          - macos
 
 jobs:
   build:
@@ -14,15 +38,34 @@ jobs:
         include:
           - os: windows-latest
             target: windows-x64
+            platform: windows
           - os: macos-15
             target: macos-arm64
-
+            platform: macos
+    if: ${{ inputs.platform == 'both' || inputs.platform == matrix.platform }}
     runs-on: ${{ matrix.os }}
-
+    env:
+      APP_NAME: ${{ inputs.app_name }}
+      APP_URL: ${{ inputs.app_url }}
+      APP_ID: ${{ inputs.app_id }}
+      APP_VERSION: ${{ inputs.app_version }}
     steps:
       - uses: actions/checkout@v4
 
-      # WINDOWS
+      - name: Generate build-specific settings
+        shell: bash
+        run: |
+          node -e '
+            const fs = require("node:fs");
+            const url = new URL(process.env.APP_URL);
+            if (!["http:", "https:"].includes(url.protocol)) throw new Error("APP_URL must be HTTP(S)");
+            if (!process.env.APP_NAME.trim()) throw new Error("APP_NAME is required");
+            if (!/^[a-zA-Z][a-zA-Z0-9]*(\\.[a-zA-Z][a-zA-Z0-9-]*)+$/.test(process.env.APP_ID)) throw new Error("Invalid APP_ID");
+            fs.writeFileSync("src/settings.ts",
+              "export const APP_URL = " + JSON.stringify(url.toString()) + ";\\n" +
+              "export const APP_TITLE = " + JSON.stringify(process.env.APP_NAME) + ";\\n");
+          '
+
       - name: Install Hutch (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
@@ -33,15 +76,12 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $hutchBin = Join-Path $HOME ".hutch\bin"
-
+          $hutchBin = Join-Path $HOME ".hutch\\bin"
           if (-not (Test-Path (Join-Path $hutchBin "hutch.exe"))) {
             throw "Hutch executable not found in $hutchBin"
           }
-
           Add-Content -Path $env:GITHUB_PATH -Value $hutchBin
 
-      # MACOS
       - name: Install Hutch (macOS)
         if: runner.os == 'macOS'
         shell: bash
@@ -56,24 +96,20 @@ jobs:
         run: |
           echo "$HOME/.hutch/bin" >> "$GITHUB_PATH"
 
-      # VERIFY INSTALLATION
       - name: Verify Hutch
         shell: bash
         run: |
           command -v hutch
           hutch --version
 
-      # BUILD
       - name: Build
         shell: bash
-        run: |
-          hutch electrobun build --env=stable
+        run: hutch electrobun build --env=stable
 
-      # UPLOAD
       - name: Upload output
         uses: actions/upload-artifact@v4
         with:
-          name: foz-tarefas-${{ matrix.target }}
+          name: desktop-${{ matrix.target }}-${{ github.run_id }}
           path: |
             build/**
             dist/**
