@@ -38,13 +38,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: windows-latest
-            target: windows-x64
-            platform: windows
-          - os: macos-15
-            target: macos-arm64
-            platform: macos
+        include: ${{ fromJSON(inputs.platform == 'windows' && '[{"os":"windows-latest","target":"windows-x64","platform":"windows"}]' || inputs.platform == 'macos' && '[{"os":"macos-15","target":"macos-arm64","platform":"macos"}]' || '[{"os":"windows-latest","target":"windows-x64","platform":"windows"},{"os":"macos-15","target":"macos-arm64","platform":"macos"}]') }}
     runs-on: ${{ matrix.os }}
     env:
       APP_NAME: ${{ inputs.app_name }}
@@ -53,10 +47,8 @@ jobs:
       APP_VERSION: ${{ inputs.app_version }}
     steps:
       - uses: actions/checkout@v4
-        if: ${{ inputs.platform == 'both' || inputs.platform == matrix.platform }}
 
       - name: Generate build-specific settings
-        if: ${{ inputs.platform == 'both' || inputs.platform == matrix.platform }}
         shell: bash
         run: |
           node -e '
@@ -71,13 +63,13 @@ jobs:
           '
 
       - name: Install Hutch (Windows)
-        if: (inputs.platform == 'both' || inputs.platform == matrix.platform) && runner.os == 'Windows'
+        if: runner.os == 'Windows'
         shell: pwsh
         run: |
           & ([scriptblock]::Create((irm https://hutch.blackboard.sh/hutch/install.ps1)))
 
       - name: Add Hutch to PATH (Windows)
-        if: (inputs.platform == 'both' || inputs.platform == matrix.platform) && runner.os == 'Windows'
+        if: runner.os == 'Windows'
         shell: pwsh
         run: |
           $hutchBin = Join-Path $HOME ".hutch\bin"
@@ -87,7 +79,7 @@ jobs:
           Add-Content -Path $env:GITHUB_PATH -Value $hutchBin
 
       - name: Install Hutch (macOS)
-        if: (inputs.platform == 'both' || inputs.platform == matrix.platform) && runner.os == 'macOS'
+        if: runner.os == 'macOS'
         shell: bash
         run: |
           xcode-select -p
@@ -95,25 +87,22 @@ jobs:
           curl -fsSL https://hutch.blackboard.sh/hutch/install.sh | sh
 
       - name: Add Hutch to PATH (macOS)
-        if: (inputs.platform == 'both' || inputs.platform == matrix.platform) && runner.os == 'macOS'
+        if: runner.os == 'macOS'
         shell: bash
         run: |
           echo "$HOME/.hutch/bin" >> "$GITHUB_PATH"
 
       - name: Verify Hutch
-        if: ${{ inputs.platform == 'both' || inputs.platform == matrix.platform }}
         shell: bash
         run: |
           command -v hutch
           hutch --version
 
       - name: Build
-        if: ${{ inputs.platform == 'both' || inputs.platform == matrix.platform }}
         shell: bash
         run: hutch electrobun build --env=stable
 
       - name: Upload output
-        if: ${{ inputs.platform == 'both' || inputs.platform == matrix.platform }}
         uses: actions/upload-artifact@v4
         with:
           name: desktop-${{ matrix.target }}-${{ github.run_id }}
@@ -164,7 +153,7 @@ jobs:
               files = [p for p in folder.rglob("*") if p.is_file()]
               if not files:
                   raise SystemExit(f"Empty artifact: {folder.name}")
-                  platform = "windows-x64" if "windows-x64" in folder.name else "macos-arm64" if "macos-arm64" in folder.name else "desktop"
+              platform = "windows-x64" if "windows-x64" in folder.name else "macos-arm64" if "macos-arm64" in folder.name else "desktop"
               archive = archives / f"{slug}-v{os.environ['APP_VERSION']}-{platform}.zip"
               with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as zf:
                   for file in files:
