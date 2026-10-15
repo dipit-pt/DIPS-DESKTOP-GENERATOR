@@ -1,4 +1,9 @@
-import { BrowserView, BrowserWindow, Utils } from "electrobun/main";
+import {
+  ApplicationMenu,
+  BrowserView,
+  BrowserWindow,
+  Utils,
+} from "electrobun/main";
 import type { DesktopRPC } from "../notifications";
 import { APP_TITLE, APP_URL } from "../settings";
 
@@ -6,6 +11,27 @@ const parsed = new URL(APP_URL);
 if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
   throw new Error("APP_URL must be an http(s) URL");
 }
+
+// Native edit roles supply clipboard actions and the standard keyboard shortcuts.
+ApplicationMenu.setApplicationMenu([
+  {
+    label: APP_TITLE,
+    submenu: [{ role: "quit", accelerator: "q" }],
+  },
+  {
+    label: "Edit",
+    submenu: [
+      { role: "undo" },
+      { role: "redo" },
+      { type: "separator" },
+      { role: "cut" },
+      { role: "copy" },
+      { role: "paste" },
+      { role: "pasteAndMatchStyle" },
+      { role: "selectAll" },
+    ],
+  },
+]);
 
 // The bridge has no filesystem, token or arbitrary command access.
 const rpc = BrowserView.defineRPC<DesktopRPC>({

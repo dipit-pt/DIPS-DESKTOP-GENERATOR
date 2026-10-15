@@ -74,6 +74,10 @@ hutch electrobun dev --watch
 
 For local testing, edit `src/settings.ts` or generate it yourself. The workflow replaces it for CI builds.
 
+## Native editing
+
+Generated apps include a native **Edit** menu for undo, redo, cut, copy, paste, paste and match style, and select all. On macOS these roles enable the standard Command shortcuts in the focused webview field. Windows/Linux keep their native webview editing behaviour; platform menu-role support varies. Clipboard contents are not exposed through the notification bridge.
+
 ## Native notifications
 
 Generated apps expose `window.multiDesktop.notify({ title, body })` to the configured website's top-level page. The website calls this when it receives a new notification; the launcher displays it through [Electrobun Utils.showNotification](https://framework.blackboard.sh/electrobun/apis/utils/#notifications).
