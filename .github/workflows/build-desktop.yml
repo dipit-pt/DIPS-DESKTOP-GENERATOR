@@ -42,7 +42,6 @@ jobs:
           - os: macos-15
             target: macos-arm64
             platform: macos
-    if: ${{ inputs.platform == 'both' || inputs.platform == matrix.platform }}
     runs-on: ${{ matrix.os }}
     env:
       APP_NAME: ${{ inputs.app_name }}
@@ -51,8 +50,10 @@ jobs:
       APP_VERSION: ${{ inputs.app_version }}
     steps:
       - uses: actions/checkout@v4
+        if: ${{ inputs.platform == 'both' || inputs.platform == matrix.platform }}
 
       - name: Generate build-specific settings
+        if: ${{ inputs.platform == 'both' || inputs.platform == matrix.platform }}
         shell: bash
         run: |
           node -e '
@@ -60,30 +61,30 @@ jobs:
             const url = new URL(process.env.APP_URL);
             if (!["http:", "https:"].includes(url.protocol)) throw new Error("APP_URL must be HTTP(S)");
             if (!process.env.APP_NAME.trim()) throw new Error("APP_NAME is required");
-            if (!/^[a-zA-Z][a-zA-Z0-9]*(\\.[a-zA-Z][a-zA-Z0-9-]*)+$/.test(process.env.APP_ID)) throw new Error("Invalid APP_ID");
+            if (!/^[a-zA-Z][a-zA-Z0-9]*(\.[a-zA-Z][a-zA-Z0-9-]*)+$/.test(process.env.APP_ID)) throw new Error("Invalid APP_ID");
             fs.writeFileSync("src/settings.ts",
-              "export const APP_URL = " + JSON.stringify(url.toString()) + ";\\n" +
-              "export const APP_TITLE = " + JSON.stringify(process.env.APP_NAME) + ";\\n");
+              "export const APP_URL = " + JSON.stringify(url.toString()) + ";\n" +
+              "export const APP_TITLE = " + JSON.stringify(process.env.APP_NAME) + ";\n");
           '
 
       - name: Install Hutch (Windows)
-        if: runner.os == 'Windows'
+        if: (inputs.platform == 'both' || inputs.platform == matrix.platform) && runner.os == 'Windows'
         shell: pwsh
         run: |
           & ([scriptblock]::Create((irm https://hutch.blackboard.sh/hutch/install.ps1)))
 
       - name: Add Hutch to PATH (Windows)
-        if: runner.os == 'Windows'
+        if: (inputs.platform == 'both' || inputs.platform == matrix.platform) && runner.os == 'Windows'
         shell: pwsh
         run: |
-          $hutchBin = Join-Path $HOME ".hutch\\bin"
+          $hutchBin = Join-Path $HOME ".hutch\bin"
           if (-not (Test-Path (Join-Path $hutchBin "hutch.exe"))) {
             throw "Hutch executable not found in $hutchBin"
           }
           Add-Content -Path $env:GITHUB_PATH -Value $hutchBin
 
       - name: Install Hutch (macOS)
-        if: runner.os == 'macOS'
+        if: (inputs.platform == 'both' || inputs.platform == matrix.platform) && runner.os == 'macOS'
         shell: bash
         run: |
           xcode-select -p
@@ -91,22 +92,25 @@ jobs:
           curl -fsSL https://hutch.blackboard.sh/hutch/install.sh | sh
 
       - name: Add Hutch to PATH (macOS)
-        if: runner.os == 'macOS'
+        if: (inputs.platform == 'both' || inputs.platform == matrix.platform) && runner.os == 'macOS'
         shell: bash
         run: |
           echo "$HOME/.hutch/bin" >> "$GITHUB_PATH"
 
       - name: Verify Hutch
+        if: ${{ inputs.platform == 'both' || inputs.platform == matrix.platform }}
         shell: bash
         run: |
           command -v hutch
           hutch --version
 
       - name: Build
+        if: ${{ inputs.platform == 'both' || inputs.platform == matrix.platform }}
         shell: bash
         run: hutch electrobun build --env=stable
 
       - name: Upload output
+        if: ${{ inputs.platform == 'both' || inputs.platform == matrix.platform }}
         uses: actions/upload-artifact@v4
         with:
           name: desktop-${{ matrix.target }}-${{ github.run_id }}
