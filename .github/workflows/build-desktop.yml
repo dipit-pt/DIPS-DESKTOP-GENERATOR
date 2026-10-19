@@ -288,10 +288,23 @@ jobs:
                       raise SystemExit(f"Expected one Windows Setup.zip in {folder}, found: {installers}")
                   import shutil
                   shutil.copy2(installers[0], archive)
+              elif platform == "linux-x64":
+                  # Ship only the installable Linux distribution, not build outputs
+                  # and intermediate archives bundled together.
+                  candidates = [p for p in files if p.name.endswith(("-Setup.tar.gz", "-Setup.zip", ".AppImage", ".deb"))]
+                  if len(candidates) != 1:
+                      raise SystemExit(f"Expected one Linux installer/package in {folder}; candidates: {candidates}; all files: {[str(p.relative_to(folder)) for p in files]}")
+                  import shutil
+                  source = candidates[0]
+                  if source.name.endswith(".tar.gz"):
+                      archive = archive.with_suffix(".tar.gz")
+                  elif source.suffix == ".deb":
+                      archive = archive.with_suffix(".deb")
+                  elif source.suffix == ".AppImage":
+                      archive = archive.with_suffix(".AppImage")
+                  shutil.copy2(source, archive)
               else:
-                  with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as zf:
-                      for file in files:
-                          zf.write(file, file.relative_to(folder))
+                  raise SystemExit(f"Unsupported platform: {platform}")
               print(f"Packaged {folder.name} -> {archive}")
           pathlib.Path("release-notes.md").write_text(
               f"## {os.environ['APP_NAME']}\n\n"
