@@ -214,26 +214,17 @@ jobs:
           root = pathlib.Path("release-files")
           archives = pathlib.Path("release-packages")
           archives.mkdir(exist_ok=True)
-          folders = [p for p in root.iterdir() if p.is_dir()] if root.exists() else []
-          # download-artifact may place a single matched artifact directly in the destination.
-          if not folders and root.is_dir() and any(root.iterdir()):
-              folders = [root]
+          folders = sorted(p for p in root.iterdir() if p.is_dir() and p.name.startswith("desktop-")) if root.exists() else []
           if not folders:
-              raise SystemExit("No build artifacts found; refusing to publish an empty release")
-          slug = re.sub(r"[^a-z0-9-]+", "-", os.environ["APP_NAME"].lower()).strip("-")
+              raise SystemExit(f"No downloaded desktop artifacts in {root}; entries: {list(root.iterdir()) if root.exists() else 'missing directory'}")
+          slug = re.sub(r"[^a-z0-9-]+", "-", os.environ["APP_NAME"].lower()).strip("-") or "desktop-app"
           for folder in folders:
+              platform = next((target for target in ("windows-x64", "macos-arm64", "linux-x64") if folder.name.startswith(f"desktop-{target}-")), None)
+              if platform is None:
+                  raise SystemExit(f"Unknown artifact platform: {folder.name}")
               files = [p for p in folder.rglob("*") if p.is_file()]
               if not files:
                   raise SystemExit(f"Empty artifact: {folder.name}")
-              if (folder / "macos-arm64.zip").is_file():
-                  platform = "macos-arm64"
-              else:
-                  platform = next((target for target in ("windows-x64", "linux-x64")
-                      if target in folder.name or any(target in str(p.relative_to(folder)) for p in files)), None)
-                  if platform is None and any(p.suffix.lower() == ".exe" for p in files):
-                      platform = "windows-x64"
-                  if platform is None:
-                      raise SystemExit(f"Cannot identify platform in {folder.name}")
               archive = archives / f"{slug}-v{os.environ['APP_VERSION']}-{platform}.zip"
               if platform == "macos-arm64":
                   source = folder / "macos-arm64.zip"
@@ -245,6 +236,7 @@ jobs:
                   with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as zf:
                       for file in files:
                           zf.write(file, file.relative_to(folder))
+              print(f"Packaged {folder.name} -> {archive}")
           pathlib.Path("release-notes.md").write_text(
               f"## {os.environ['APP_NAME']}\n\n"
               f"**Version:** `{os.environ['APP_VERSION']}`  \n"
