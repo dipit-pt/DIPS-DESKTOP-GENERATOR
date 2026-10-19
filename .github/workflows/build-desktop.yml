@@ -4,23 +4,23 @@ on:
   workflow_dispatch:
     inputs:
       app_name:
-        description: Application name
+        description: "Nome apresentado na aplicação e nas releases"
         required: true
         type: string
       app_url:
-        description: Website URL (https://...)
+        description: "Endereço HTTPS do website que a aplicação vai abrir"
         required: true
         type: string
       windows:
-        description: Windows
+        description: "Gerar aplicação para Windows (64-bit)"
         type: boolean
         default: true
       macos:
-        description: macOS
+        description: "Gerar aplicação para macOS (Apple Silicon)"
         type: boolean
         default: true
       linux:
-        description: Linux
+        description: "Gerar aplicação para Linux (64-bit)"
         type: boolean
         default: false
 
