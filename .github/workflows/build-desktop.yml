@@ -63,12 +63,13 @@ jobs:
           print("Selected:", ", ".join(x["platform"] for x in selected))
           PY
 
-      - name: Derive identifier and automatic version
+      - uses: actions/checkout@v7
+
+      - name: Derive identifier and generator version
         id: identity
         shell: bash
         env:
           APP_URL: ${{ inputs['Endereço HTTPS'] }}
-          RUN_NUMBER: ${{ github.run_number }}
         run: |
           python3 - <<'PY'
           import ipaddress
@@ -89,7 +90,11 @@ jobs:
           if len(labels) < 2 or any(not label or not label.replace("-", "").isalnum() or label[0] == "-" or label[-1] == "-" for label in labels):
               raise SystemExit("Invalid domain name for application identifier")
           app_id = ".".join(reversed(labels))
-          version = f"1.0.{os.environ['RUN_NUMBER']}"
+          from pathlib import Path
+          version = Path("VERSION").read_text(encoding="utf-8").strip()
+          import re
+          if not re.fullmatch(r"(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)", version):
+              raise SystemExit("VERSION must contain a semantic version such as 1.1.0")
           with open(os.environ["GITHUB_OUTPUT"], "a") as output:
               output.write(f"app_id={app_id}\n")
               output.write(f"app_version={version}\n")
@@ -110,6 +115,7 @@ jobs:
       APP_URL: ${{ inputs['Endereço HTTPS'] }}
       APP_ID: ${{ needs.prepare.outputs.app_id }}
       APP_VERSION: ${{ needs.prepare.outputs.app_version }}
+      GENERATOR_SHA: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v7
 
