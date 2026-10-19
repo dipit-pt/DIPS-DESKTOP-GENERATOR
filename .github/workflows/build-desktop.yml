@@ -1,26 +1,27 @@
-name: Build desktop apps
+name: DIPIT · Desktop Generator
+run-name: "${{ inputs.app_name }} · #${{ github.run_number }} · ${{ inputs.windows && 'Windows ' || '' }}${{ inputs.macos && 'macOS ' || '' }}${{ inputs.linux && 'Linux' || '' }}"
 
 on:
   workflow_dispatch:
     inputs:
       app_name:
-        description: "Nome da aplicação"
+        description: "Aplicação · nome visível no desktop"
         required: true
         type: string
       app_url:
-        description: "URL do website"
+        description: "Website · endereço https://..."
         required: true
         type: string
       windows:
-        description: "Windows"
+        description: "Windows · x64"
         type: boolean
         default: true
       macos:
-        description: "macOS"
+        description: "macOS · Apple Silicon"
         type: boolean
         default: true
       linux:
-        description: "Linux"
+        description: "Linux · x64"
         type: boolean
         default: false
 
