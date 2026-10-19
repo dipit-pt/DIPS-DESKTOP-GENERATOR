@@ -8,25 +8,38 @@ Build lightweight Windows, macOS and Linux desktop wrappers for your web applica
 
 ## Quick start
 
-1. Open **Actions → Build desktop apps → Run workflow**.
+1. Open **Actions → DIPIT · Desktop Generator → Run workflow**.
 2. Select the **main** branch.
-3. Enter only the **app name**, **website URL**, and **platform**. The identifier and version are generated automatically.
+3. Enter the **application name** and **website URL**, then tick **Windows**, **macOS**, and/or **Linux**. The app identifier is derived automatically from the hostname. All builds use the wrapper version in [`VERSION`](VERSION).
 4. Start the workflow. When both build and publish jobs succeed, find the named app under **Releases** on the right-hand side of the repository.
 5. Open the release and download the ZIP for your platform from **Assets**.
 
-| Input    | Example                            | Purpose                                             |
-| -------- | ---------------------------------- | --------------------------------------------------- |
-| App name | `FozConstroi Tarefas`              | Desktop window title and app name                   |
-| App URL  | `https://tarefas.fozconstroi.com/` | Website loaded by the desktop window                |
-| Platform | `both`                             | Windows, macOS, Linux, both (Windows/macOS), or all |
+| Input | Example | Purpose |
+| --- | --- | --- |
+| Nome | `FozConstroi Tarefas` | Application title and name |
+| Website | `https://tarefas.fozconstroi.com/` | URL opened by the wrapper |
+| Windows / macOS / Linux | Checkboxes | Select any combination of operating systems |
 
-> **Automatic identity:** The hostname is reversed to form the app ID: `tarefas.fozconstroi.com` → `com.fozconstroi.tarefas`. Paths and ports are ignored. Version is `1.0.<workflow run number>` and increments with every workflow run (across all apps). Builds using the same hostname share an app ID; use distinct subdomains for separate installable apps. The URL and name are embedded at build time.
+> **Application identity:** The hostname is reversed into an app ID: `tarefas.fozconstroi.com` → `com.fozconstroi.tarefas`. Paths and ports are ignored. Apps using the same hostname share an ID; use separate hostnames for separately installable apps.
+
+## Versioning: one wrapper version, many applications
+
+The version is the version of the **DIPS Desktop Generator wrapper code**, **not** the number of times an app was generated. It is stored in the root [`VERSION`](VERSION) file and follows semantic versioning (`MAJOR.MINOR.PATCH`).
+
+- **PATCH** (`1.0.0` → `1.0.1`): compatible fixes to the wrapper.
+- **MINOR** (`1.0.1` → `1.1.0`): new backwards-compatible wrapper features.
+- **MAJOR** (`1.1.0` → `2.0.0`): breaking changes.
+
+When wrapper code changes, update `VERSION` in the **same commit or pull request**. Ordinary app generation **does not** increment it. All apps generated from the same wrapper revision use the same version, e.g. `FozConstroi Tarefas | v1.1.0` and `ConfrioVo | v1.1.0`. Release tags additionally include the app ID and GitHub run ID so builds never collide. Release notes record the generator commit SHA to identify the exact source revision.
+
+> **Important:** Version bumps are intentionally explicit, not automatically inferred from every GitHub commit. This avoids version changes for README edits, workflow-only housekeeping, or failed builds. Update `VERSION` whenever the actual wrapper changes. The workflow reads the value and embeds it into the Electrobun application.
+
 
 ## Build gallery: GitHub Releases
 
 Every successful manual build publishes a **named GitHub Release** with the application name, version, website URL, build number, and downloadable platform archives. This makes the repository's **Releases** sidebar your build catalog.
 
-**Example:** `FozConstroi Tarefas · v1.0.0 · Build #12`
+**Example:** `FozConstroi Tarefas | v1.1.0`
 
 Release tags include the app identifier and workflow run ID to avoid collisions across builds. Downloads remain accessible from [Releases](https://github.com/dipit-pt/DIPS-DESKTOP-GENERATOR/releases).
 
@@ -37,7 +50,7 @@ Release tags include the app identifier and workflow run ID to avoid collisions 
 ```text
 GitHub Actions inputs
          |
-         +--> Derive reversed-domain ID + automatic version
+         +--> Derive reversed-domain ID + wrapper version from VERSION
          |
          +--> Generate src/settings.ts (build only)
          |
@@ -101,7 +114,7 @@ Linux also needs a desktop notification daemon and `notify-send` (`libnotify-bin
 
 - [ ] Verify the destination URL uses HTTPS.
 - [ ] Verify the hostname maps to the intended application identity.
-- [ ] Confirm the automatically assigned version.
+- [ ] Confirm the wrapper version in `VERSION` and bump it for wrapper changes.
 - [ ] Build for the desired operating systems.
 - [ ] Test installation, authentication, navigation, and external links.
 - [ ] Configure signing/notarization before distributing to end users.
