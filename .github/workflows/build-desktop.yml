@@ -1,82 +1,4 @@
-name: Build desktop apps
-
-on:
-  workflow_dispatch:
-    inputs:
-      app_name:
-        description: "Name shown in the app and release"
-        required: true
-        type: string
-      app_url:
-        description: "Full website URL, starting with https://"
-        required: true
-        type: string
-      platform:
-        description: "Target operating systems"
-        required: true
-        default: windows-and-macos
-        type: choice
-        options:
-          - windows-and-macos
-          - windows
-          - macos
-          - linux
-          - windows-macos-linux
-
-permissions:
-  contents: read
-
-jobs:
-  prepare:
-    permissions:
-      contents: read
-    name: Resolve application identity
-    runs-on: ubuntu-24.04
-    outputs:
-      app_id: ${{ steps.identity.outputs.app_id }}
-      app_version: ${{ steps.identity.outputs.app_version }}
-    steps:
-      - name: Derive identifier and automatic version
-        id: identity
-        shell: bash
-        env:
-          APP_URL: ${{ inputs.app_url }}
-          RUN_NUMBER: ${{ github.run_number }}
-        run: |
-          python3 - <<'PY'
-          import ipaddress
-          import os
-          from urllib.parse import urlsplit
-
-          url = urlsplit(os.environ["APP_URL"])
-          if url.scheme not in ("http", "https") or not url.hostname:
-              raise SystemExit("Please enter a valid HTTP(S) URL")
-          host = url.hostname.lower().rstrip(".")
-          try:
-              ipaddress.ip_address(host)
-              raise SystemExit("Use a domain name rather than an IP address")
-          except ValueError as exc:
-              if str(exc) == "Use a domain name rather than an IP address":
-                  raise
-          labels = host.split(".")
-          if len(labels) < 2 or any(not label or not label.replace("-", "").isalnum() or label[0] == "-" or label[-1] == "-" for label in labels):
-              raise SystemExit("Invalid domain name for application identifier")
-          app_id = ".".join(reversed(labels))
-          version = f"1.0.{os.environ['RUN_NUMBER']}"
-          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
-              output.write(f"app_id={app_id}\n")
-              output.write(f"app_version={version}\n")
-          print(f"App ID: {app_id}; version: {version}")
-          PY
-
-  build:
-    permissions:
-      contents: read
-    needs: prepare
-    strategy:
-      fail-fast: false
-      matrix:
-        include: ${{ fromJSON(inputs.platform == 'linux' && '[{"os":"ubuntu-24.04","target":"linux-x64","platform":"linux"}]' || inputs.platform == 'windows-macos-linux' && '[{"os":"windows-latest","target":"windows-x64","platform":"windows"},{"os":"macos-15","target":"macos-arm64","platform":"macos"},{"os":"ubuntu-24.04","target":"linux-x64","platform":"linux"}]' || inputs.platform == 'windows' && '[{"os":"windows-latest","target":"windows-x64","platform":"windows"}]' || inputs.platform == 'macos' && '[{"os":"macos-15","target":"macos-arm64","platform":"macos"}]' || '[{"os":"windows-latest","target":"windows-x64","platform":"windows"},{"os":"macos-15","target":"macos-arm64","platform":"macos"}]') }}
+        include: ${{ fromJSON(needs.prepare.outputs.matrix) }}
     runs-on: ${{ matrix.os }}
     env:
       APP_NAME: ${{ inputs.app_name }}
@@ -84,6 +6,29 @@ jobs:
       APP_ID: ${{ needs.prepare.outputs.app_id }}
       APP_VERSION: ${{ needs.prepare.outputs.app_version }}
     steps:
+      - name: Resolve selected platforms
+        id: platforms
+        shell: bash
+        env:
+          WINDOWS: ${{ inputs.windows }}
+          MACOS: ${{ inputs.macos }}
+          LINUX: ${{ inputs.linux }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+          targets = [
+              {"os": "windows-latest", "target": "windows-x64", "platform": "windows"} if os.environ["WINDOWS"] == "true" else None,
+              {"os": "macos-15", "target": "macos-arm64", "platform": "macos"} if os.environ["MACOS"] == "true" else None,
+              {"os": "ubuntu-24.04", "target": "linux-x64", "platform": "linux"} if os.environ["LINUX"] == "true" else None,
+          ]
+          selected = [t for t in targets if t]
+          if not selected:
+              raise SystemExit("Select at least one operating system")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as out:
+              out.write("matrix=" + json.dumps(selected, separators=(",", ":")) + "\n")
+          print("Selected platforms:", ", ".join(t["platform"] for t in selected))
+          PY
+
       - uses: actions/checkout@v7
 
       - name: Generate build-specific settings
@@ -196,21 +141,21 @@ jobs:
       GH_TOKEN: ${{ github.token }}
     steps:
       - name: Download Windows artifact
-        if: ${{ inputs.platform == 'windows' || inputs.platform == 'windows-and-macos' || inputs.platform == 'windows-macos-linux' }}
+        if: ${{ inputs.windows }}
         uses: actions/download-artifact@v8
         with:
           name: desktop-windows-x64-${{ github.run_id }}
           path: release-files/windows-x64
 
       - name: Download macOS artifact
-        if: ${{ inputs.platform == 'macos' || inputs.platform == 'windows-and-macos' || inputs.platform == 'windows-macos-linux' }}
+        if: ${{ inputs.macos }}
         uses: actions/download-artifact@v8
         with:
           name: desktop-macos-arm64-${{ github.run_id }}
           path: release-files/macos-arm64
 
       - name: Download Linux artifact
-        if: ${{ inputs.platform == 'linux' || inputs.platform == 'windows-macos-linux' }}
+        if: ${{ inputs.linux }}
         uses: actions/download-artifact@v8
         with:
           name: desktop-linux-x64-${{ github.run_id }}
