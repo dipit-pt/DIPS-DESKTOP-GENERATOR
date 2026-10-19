@@ -280,34 +280,29 @@ jobs:
                       raise SystemExit(f"Missing macOS ditto archive in {folder.name}")
                   import shutil
                   shutil.copy2(source, archive)
-              elif platform in ("windows-x64", "linux-x64"):
-                  # Distribute the runnable application folder only. Electrobun's
-                  # installer archives and update payloads duplicate its resources.
-                  import stat
-                  app_roots = []
-                  for launcher in files:
-                      if launcher.name not in ("launcher.exe", "launcher"):
-                          continue
-                      if launcher.parent.name != "bin":
-                          continue
-                      app = launcher.parent.parent
-                      if (app / "Resources" / "metadata.json").is_file():
-                          app_roots.append(app)
-                  if len(app_roots) != 1:
-                      raise SystemExit(f"Expected one runnable application directory in {folder}; found: {app_roots}")
-                  app = app_roots[0]
-                  with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as zf:
-                      for file in sorted(app.rglob("*")):
-                          if not file.is_file():
-                              continue
-                          entry = zipfile.ZipInfo(str(file.relative_to(app.parent)).replace(os.sep, "/"))
-                          entry.create_system = 3
-                          entry.external_attr = (stat.S_IFREG | file.stat().st_mode & 0o777) << 16
-                          entry.compress_type = zipfile.ZIP_DEFLATED
-                          with file.open("rb") as source, zf.open(entry, "w") as target:
-                              import shutil
-                              shutil.copyfileobj(source, target)
-                  print(f"Portable application: {app}; launch from bin/launcher{'.exe' if platform == 'windows-x64' else ''}")
+              elif platform == "windows-x64":
+                  # launcher.exe is an INSTALLER, not a portable app. It needs
+                  # the .installer payload next to it. Preserve Electrobun's
+                  # complete, already compressed setup package.
+                  installers = [p for p in files if p.name.endswith("-Setup.zip")]
+                  if len(installers) != 1:
+                      raise SystemExit(f"Expected exactly one Windows Setup.zip; found {installers}")
+                  import shutil
+                  shutil.copy2(installers[0], archive)
+              elif platform == "linux-x64":
+                  # Linux's launcher is also an installer; retain its payload.
+                  candidates = [p for p in files if p.name.endswith(("-Setup.tar.gz", "-Setup.zip", ".AppImage", ".deb"))]
+                  if len(candidates) != 1:
+                      raise SystemExit(f"Expected one Linux setup package; found {candidates}; files: {[str(p.relative_to(folder)) for p in files]}")
+                  import shutil
+                  source = candidates[0]
+                  if source.name.endswith(".tar.gz"):
+                      archive = archive.with_suffix(".tar.gz")
+                  elif source.suffix == ".deb":
+                      archive = archive.with_suffix(".deb")
+                  elif source.suffix == ".AppImage":
+                      archive = archive.with_suffix(".AppImage")
+                  shutil.copy2(source, archive)
               else:
                   raise SystemExit(f"Unsupported platform: {platform}")
               print(f"Packaged {folder.name} -> {archive}")
