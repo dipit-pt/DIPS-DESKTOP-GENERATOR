@@ -5,23 +5,23 @@ on:
   workflow_dispatch:
     inputs:
       Nome da aplicação:
-        description: "Nome"
+        description: "01 · Aplicação / Nome"
         required: true
         type: string
       Endereço HTTPS:
-        description: "Website"
+        description: "02 · Aplicação / Website"
         required: true
         type: string
       Windows 64-bit:
-        description: "Windows"
+        description: "03 · Plataformas / Windows"
         type: boolean
         default: true
       macOS Apple Silicon:
-        description: "macOS"
+        description: "Plataformas / macOS"
         type: boolean
         default: true
       Linux 64-bit:
-        description: "Linux"
+        description: "Plataformas / Linux"
         type: boolean
         default: false
 
