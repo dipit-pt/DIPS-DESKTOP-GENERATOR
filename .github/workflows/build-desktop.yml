@@ -94,7 +94,7 @@ jobs:
           from pathlib import Path
           version = Path("VERSION").read_text(encoding="utf-8").strip()
           import re
-          if not re.fullmatch(r"(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)", version):
+          if not re.fullmatch(r"(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)", version):
               raise SystemExit("VERSION must contain a semantic version such as 1.1.0")
           with open(os.environ["GITHUB_OUTPUT"], "a") as output:
               output.write(f"app_id={app_id}\n")
