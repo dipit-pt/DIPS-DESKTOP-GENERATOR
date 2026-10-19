@@ -280,6 +280,14 @@ jobs:
                       raise SystemExit(f"Missing macOS ditto archive in {folder.name}")
                   import shutil
                   shutil.copy2(source, archive)
+              elif platform == "windows-x64":
+                  # Electrobun already produces a self-contained installer ZIP.
+                  # Do not bundle build/, artifacts/ and duplicate runtime archives.
+                  installers = [p for p in files if p.name.endswith("-Setup.zip")]
+                  if len(installers) != 1:
+                      raise SystemExit(f"Expected one Windows Setup.zip in {folder}, found: {installers}")
+                  import shutil
+                  shutil.copy2(installers[0], archive)
               else:
                   with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as zf:
                       for file in files:
