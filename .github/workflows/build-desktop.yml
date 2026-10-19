@@ -1,3 +1,107 @@
+name: Build desktop apps
+
+on:
+  workflow_dispatch:
+    inputs:
+      app_name:
+        description: Application name
+        required: true
+        type: string
+      app_url:
+        description: Website URL (https://...)
+        required: true
+        type: string
+      windows:
+        description: Windows
+        type: boolean
+        default: true
+      macos:
+        description: macOS
+        type: boolean
+        default: true
+      linux:
+        description: Linux
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    permissions:
+      contents: read
+    name: Resolve application identity
+    runs-on: ubuntu-24.04
+    outputs:
+      app_id: ${{ steps.identity.outputs.app_id }}
+      app_version: ${{ steps.identity.outputs.app_version }}
+      matrix: ${{ steps.platforms.outputs.matrix }}
+    steps:
+      - name: Resolve selected platforms
+        id: platforms
+        shell: bash
+        env:
+          WINDOWS: ${{ inputs.windows }}
+          MACOS: ${{ inputs.macos }}
+          LINUX: ${{ inputs.linux }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+          options = [
+              ("WINDOWS", "windows-latest", "windows-x64", "windows"),
+              ("MACOS", "macos-15", "macos-arm64", "macos"),
+              ("LINUX", "ubuntu-24.04", "linux-x64", "linux"),
+          ]
+          selected = [{"os": runner, "target": target, "platform": platform}
+                      for flag, runner, target, platform in options if os.environ[flag] == "true"]
+          if not selected:
+              raise SystemExit("Select at least one operating system")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              output.write("matrix=" + json.dumps(selected, separators=(",", ":")) + "\n")
+          print("Selected:", ", ".join(x["platform"] for x in selected))
+          PY
+
+      - name: Derive identifier and automatic version
+        id: identity
+        shell: bash
+        env:
+          APP_URL: ${{ inputs.app_url }}
+          RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          python3 - <<'PY'
+          import ipaddress
+          import os
+          from urllib.parse import urlsplit
+
+          url = urlsplit(os.environ["APP_URL"])
+          if url.scheme not in ("http", "https") or not url.hostname:
+              raise SystemExit("Please enter a valid HTTP(S) URL")
+          host = url.hostname.lower().rstrip(".")
+          try:
+              ipaddress.ip_address(host)
+              raise SystemExit("Use a domain name rather than an IP address")
+          except ValueError as exc:
+              if str(exc) == "Use a domain name rather than an IP address":
+                  raise
+          labels = host.split(".")
+          if len(labels) < 2 or any(not label or not label.replace("-", "").isalnum() or label[0] == "-" or label[-1] == "-" for label in labels):
+              raise SystemExit("Invalid domain name for application identifier")
+          app_id = ".".join(reversed(labels))
+          version = f"1.0.{os.environ['RUN_NUMBER']}"
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              output.write(f"app_id={app_id}\n")
+              output.write(f"app_version={version}\n")
+          print(f"App ID: {app_id}; version: {version}")
+          PY
+
+  build:
+    permissions:
+      contents: read
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
         include: ${{ fromJSON(needs.prepare.outputs.matrix) }}
     runs-on: ${{ matrix.os }}
     env:
@@ -173,8 +277,6 @@
                       for file in files:
                           zf.write(file, file.relative_to(folder))
               print(f"Packaged {folder.name} -> {archive}")
-          platform_names = {"windows-x64": "Windows (x64)", "macos-arm64": "macOS (Apple Silicon)", "linux-x64": "Linux (x64)"}
-          available = [platform_names[p.name] for p in folders]
           pathlib.Path("release-notes.md").write_text(
               f"## {os.environ['APP_NAME']}\n\n"
               f"**Version:** `{os.environ['APP_VERSION']}`  \n"
@@ -193,32 +295,8 @@
           BUILD_RUN: ${{ github.run_id }}
         run: |
           tag="${APP_ID}-v${APP_VERSION}-run${BUILD_RUN}"
-          platforms="$(find release-packages -maxdepth 1 -name "*.zip" -printf "%f\\n" | sed -E "s/.*-(windows-x64|macos-arm64|linux-x64)\\.zip/\\1/" | sort | tr "\\n" "+" | sed "s/+$/ /; s/+/ + /g" | xargs)"
           gh release create "$tag" release-packages/*.zip \
             --target "${GITHUB_SHA}" \
-            --title "${APP_NAME} | v${APP_VERSION} | ${platforms}" \
+            --title "${APP_NAME} | v${APP_VERSION}" \
             --notes-file release-notes.md \
-            --latest=false      - name: Resolve selected platforms
-        id: platforms
-        shell: bash
-        env:
-          WINDOWS: ${{ inputs.windows }}
-          MACOS: ${{ inputs.macos }}
-          LINUX: ${{ inputs.linux }}
-        run: |
-          python3 - <<'PY'
-          import json, os
-          targets = [
-              {"os": "windows-latest", "target": "windows-x64", "platform": "windows"} if os.environ["WINDOWS"] == "true" else None,
-              {"os": "macos-15", "target": "macos-arm64", "platform": "macos"} if os.environ["MACOS"] == "true" else None,
-              {"os": "ubuntu-24.04", "target": "linux-x64", "platform": "linux"} if os.environ["LINUX"] == "true" else None,
-          ]
-          selected = [t for t in targets if t]
-          if not selected:
-              raise SystemExit("Select at least one operating system")
-          with open(os.environ["GITHUB_OUTPUT"], "a") as out:
-              out.write("matrix=" + json.dumps(selected, separators=(",", ":")) + "\n")
-          print("Selected platforms:", ", ".join(t["platform"] for t in selected))
-          PY
-
-
+            --latest=false
