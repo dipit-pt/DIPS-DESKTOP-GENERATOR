@@ -1,27 +1,27 @@
 name: DIPIT · Desktop Generator
-run-name: "${{ inputs.app_name }} · #${{ github.run_number }} · ${{ inputs.windows && 'Windows ' || '' }}${{ inputs.macos && 'macOS ' || '' }}${{ inputs.linux && 'Linux' || '' }}"
+run-name: "${{ inputs['Nome da aplicação'] }} · #${{ github.run_number }} · ${{ inputs['Windows 64-bit'] && 'Windows ' || '' }}${{ inputs['macOS Apple Silicon'] && 'macOS ' || '' }}${{ inputs['Linux 64-bit'] && 'Linux' || '' }}"
 
 on:
   workflow_dispatch:
     inputs:
-      app_name:
-        description: "Aplicação · nome visível no desktop"
+      Nome da aplicação:
+        description: "Nome"
         required: true
         type: string
-      app_url:
-        description: "Website · endereço https://..."
+      Endereço HTTPS:
+        description: "Website"
         required: true
         type: string
-      windows:
-        description: "Windows · x64"
+      Windows 64-bit:
+        description: "Windows"
         type: boolean
         default: true
-      macos:
-        description: "macOS · Apple Silicon"
+      macOS Apple Silicon:
+        description: "macOS"
         type: boolean
         default: true
-      linux:
-        description: "Linux · x64"
+      Linux 64-bit:
+        description: "Linux"
         type: boolean
         default: false
 
@@ -43,9 +43,9 @@ jobs:
         id: platforms
         shell: bash
         env:
-          WINDOWS: ${{ inputs.windows }}
-          MACOS: ${{ inputs.macos }}
-          LINUX: ${{ inputs.linux }}
+          WINDOWS: ${{ inputs['Windows 64-bit'] }}
+          MACOS: ${{ inputs['macOS Apple Silicon'] }}
+          LINUX: ${{ inputs['Linux 64-bit'] }}
         run: |
           python3 - <<'PY'
           import json, os
@@ -67,7 +67,7 @@ jobs:
         id: identity
         shell: bash
         env:
-          APP_URL: ${{ inputs.app_url }}
+          APP_URL: ${{ inputs['Endereço HTTPS'] }}
           RUN_NUMBER: ${{ github.run_number }}
         run: |
           python3 - <<'PY'
@@ -106,8 +106,8 @@ jobs:
         include: ${{ fromJSON(needs.prepare.outputs.matrix) }}
     runs-on: ${{ matrix.os }}
     env:
-      APP_NAME: ${{ inputs.app_name }}
-      APP_URL: ${{ inputs.app_url }}
+      APP_NAME: ${{ inputs['Nome da aplicação'] }}
+      APP_URL: ${{ inputs['Endereço HTTPS'] }}
       APP_ID: ${{ needs.prepare.outputs.app_id }}
       APP_VERSION: ${{ needs.prepare.outputs.app_version }}
     steps:
@@ -216,28 +216,28 @@ jobs:
     permissions:
       contents: write
     env:
-      APP_NAME: ${{ inputs.app_name }}
-      APP_URL: ${{ inputs.app_url }}
+      APP_NAME: ${{ inputs['Nome da aplicação'] }}
+      APP_URL: ${{ inputs['Endereço HTTPS'] }}
       APP_ID: ${{ needs.prepare.outputs.app_id }}
       APP_VERSION: ${{ needs.prepare.outputs.app_version }}
       GH_TOKEN: ${{ github.token }}
     steps:
       - name: Download Windows artifact
-        if: ${{ inputs.windows }}
+        if: ${{ inputs['Windows 64-bit'] }}
         uses: actions/download-artifact@v8
         with:
           name: desktop-windows-x64-${{ github.run_id }}
           path: release-files/windows-x64
 
       - name: Download macOS artifact
-        if: ${{ inputs.macos }}
+        if: ${{ inputs['macOS Apple Silicon'] }}
         uses: actions/download-artifact@v8
         with:
           name: desktop-macos-arm64-${{ github.run_id }}
           path: release-files/macos-arm64
 
       - name: Download Linux artifact
-        if: ${{ inputs.linux }}
+        if: ${{ inputs['Linux 64-bit'] }}
         uses: actions/download-artifact@v8
         with:
           name: desktop-linux-x64-${{ github.run_id }}
