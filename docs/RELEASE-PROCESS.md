@@ -1,32 +1,31 @@
-# Desktop release process (experimental branch)
+# Releases and updates via GitHub
 
-## Build without releasing
+The source repository stays private. Only approved Electrobun update files are pushed to the `gh-pages` branch, which GitHub Pages must serve publicly.
 
-Run **DIPIT · Build (test only)** with app name, target URL, selected operating systems, and optionally an HTTPS square icon URL and a stable update base URL. The run produces CI artifacts and a build manifest, retained for 30 days. It does **not** publish a release or modify any update feeds.
+## Once-only GitHub setup
 
-Install and exercise those packages on real Windows/macOS/Linux devices before promoting. Keep the build run ID.
+1. Repository **Settings → Pages**: select **Deploy from a branch**, branch `gh-pages`, folder `/(root)`. The branch is created on the first approved release.
+2. If GitHub Pages cannot be published publicly from this private repo under the organization's plan or policies, use a separate public updates repository or a static host. Do **not** embed a GitHub token in client apps.
+3. Repository **Settings → Environments → production**: create a protected environment with required reviewers (and limit eligible deployment branches as appropriate).
+4. Repository **Settings → Actions → General**: allow GitHub Actions to write repository contents (the publication job pushes `gh-pages`).
+5. Test the public URL `https://dipit-pt.github.io/DIPS-DESKTOP-GENERATOR/apps/<app-id>/stable-<platform>-update.json` after first release. It must return JSON without authentication.
 
-## Promote a tested build
+## Build and approve
 
-Run **DIPIT · Publish approved build** and supply the successful build run ID. The workflow checks successful completion, downloads the archived outputs and manifest, packages installers and SHA-256 checksums, and creates a GitHub Release. It does not rebuild the binaries.
+1. Run **DIPIT · Build (test only)**; supply app name, URL, **App Version**, selected platforms and optionally the HTTPS icon URL. **There is no Update URL field**.
+2. Download CI artifacts, install, and test on real target devices. This action neither creates a release nor changes the update feed.
+3. Note the build **run ID**. Test artifacts expire after 30 days.
+4. Run **DIPIT · Publish approved build** with that ID and approve the production environment request. It promotes the exact build, creates a GitHub Release and pushes its **stable** Electrobun update payloads and metadata to the app-specific Pages path. The JSON is delivered with the bundle from the same tested build.
+5. Installed applications only discover these approved update files. The native **Updates → Check for Updates** menu is for manually checking; the app also checks on startup and applies a prepared update on a subsequent launch.
 
-Configure GitHub's **production** Environment with required reviewers to add a real approval step. A manual dispatch by itself is not access control.
+Versioning: Each app version must advance before a new approved update. Never publish a different build with the same version for the same app. The workflow does not currently enforce monotonic versions against the public feed, so validate them before approval.
 
-## Automatic updates: hosting is still required
+**Current limitation:** the `gh-pages` branch stores binary update archives in Git; this is suitable only for modest payload sizes. GitHub enforces a 100 MiB per-file limit and Pages has usage limits. Do not use this method for larger update bundles or significant download volume; migrate that public distribution endpoint to object storage.
 
-The app has a native **Updates > Check for Updates** menu on Windows/macOS, and a background check. If a production `release.baseUrl` was embedded, the app can download approved update metadata and payloads. Prepared updates are applied the next time the app launches. Linux does not currently provide the native application menu.
+## Testing before merging
 
-**Current limitation:** this branch's publish workflow creates a *private repository* GitHub Release but does NOT publish Electrobun update metadata to a public per-app HTTPS host. Auto-update is therefore not production-ready yet. Do not set the Update URL to a location that is not independently controlled and populated only by manual approvals.
-
-Before production rollout, implement a verified publish-to-host stage that uploads *all* Electrobun `artifacts/` update bundles and patches to a per-app prefix and replaces the stable update JSON **last**, only after human approval. Restrict the hosting credentials to the production environment. Configure a unique, immutable application identity, a monotonic app version per release, code signing and rollback procedure. These matter especially because all applications currently share the repository's `VERSION` file.
-
-## Testing checklist
-
-- Test custom logo on macOS, Windows and Linux in real installers.
-- Confirm notification and native update menu on Windows/macOS.
-- Confirm a test build **does not** create a GitHub Release.
-- Confirm a successful test build can be manually promoted.
-- Confirm an unsuccessful run cannot be promoted.
-- Confirm a previous public update endpoint remains unchanged after unapproved builds.
-- Validate staged update persistence and application of an approved version on a second launch.
-- Validate signing/notarization before external distribution.
+- A GitHub Actions test run has **not yet** validated these workflow changes. Check GitHub's YAML and platform-specific Electrobun configuration in CI.
+- Ensure generated `stable-<target>-update.json` and tarball files are present and reachable on Pages, with correct names. Electrobun requires a flat directory per app.
+- Check Windows/macOS native menu and update lifecycle on installed, signed packages. Unsigned builds can be rejected by platform protections.
+- Test initial install, subsequent approved version, update downloaded but not installed until next launch, and broken/failed build isolation.
+- Do not merge until testing and approval. Pages must be set up by a repository administrator.
