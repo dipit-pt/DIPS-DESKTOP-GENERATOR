@@ -11,7 +11,7 @@ permissions:
   contents: write
 concurrency:
   group: desktop-apps
-  cancel-in-progress: false
+  cancel-in-progress: true
 jobs:
   prepare:
     runs-on: ubuntu-24.04
