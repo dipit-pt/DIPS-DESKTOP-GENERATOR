@@ -29,3 +29,14 @@ Versioning: Each app version must advance before a new approved update. Never pu
 - Check Windows/macOS native menu and update lifecycle on installed, signed packages. Unsigned builds can be rejected by platform protections.
 - Test initial install, subsequent approved version, update downloaded but not installed until next launch, and broken/failed build isolation.
 - Do not merge until testing and approval. Pages must be set up by a repository administrator.
+
+## Controlled macOS updater smoke test
+
+1. Build and install **A+ Tarefas 1.2.0** from this refactor branch. This is the updater-capable base. A previously installed 1.0.0 may not know the configured feed; replace it once manually.
+2. Verify the installed app opens and its menu shows version 1.2.0. Leave it installed.
+3. Make a visible harmless change on this branch, then build **1.2.1** for macOS ARM64 only. Download and check this candidate manually on a second Mac or test user if available.
+4. **Only after the candidate is verified**, launch *Publish approved build* using that build's run ID. The workflow downloads the exact tested artifact, creates a GitHub Release, and publishes its stable update metadata to GitHub Pages.
+5. Check GitHub Pages serves `apps/com.fozconstroi.tarefas/stable-macos-arm64-update.json` plus the referenced .tar.zst file without authentication.
+6. Open the installed 1.2.0 and choose **Check for Updates**. Wait for the update-ready notification, quit and reopen the app, and verify 1.2.1 is running.
+
+**Warning:** `stable` is a real update channel; approving a release affects *all installed applications with this exact app identifier and update base URL*, not only your test Mac. If customers already use this new updater URL, use a different test hostname/app ID or separate test update channel before publication.
