@@ -33,6 +33,8 @@ jobs:
           run = json.load(open("run.json"))
           if run["status"] != "completed" or run["conclusion"] != "success":
               raise SystemExit("Only completed successful builds can be promoted")
+          if run["head_branch"] != "refactor/approval-gated-releases":
+              raise SystemExit("Only test-branch builds can be promoted")
           if run["name"] != "DIPIT · Build (test only)":
               raise SystemExit("Run does not belong to the test-build workflow")
           if run["head_repository"]["full_name"] != os.environ["GH_REPO"]:
@@ -50,6 +52,9 @@ jobs:
           root = pathlib.Path("downloaded")
           manifest = json.loads((root / "desktop-manifest/build-manifest.json").read_text())
           run_id = manifest["run_id"]
+          run = json.loads(pathlib.Path("run.json").read_text())
+          if str(run["id"]) != str(run_id) or run["head_sha"] != manifest["commit"]:
+              raise SystemExit("Build manifest does not match verified source run")
           app_id = manifest["app_id"]
           version = manifest["app_version"]
           if not re.fullmatch(r"[a-zA-Z0-9.-]+", app_id) or not re.fullmatch(r"\d+\.\d+\.\d+", version):
@@ -95,6 +100,9 @@ jobs:
               manifests = [p for p in update_files if p.name.startswith("stable-") and p.name.endswith("-update.json")]
               if len(manifests) != 1:
                   raise SystemExit(f"Missing Electrobun stable update JSON for {target}: {update_files}")
+              archive_files = [p for p in update_files if p.name.endswith(".tar.zst")]
+              if not archive_files:
+                  raise SystemExit(f"Missing full Electrobun updater bundle for {target}")
               for src in update_files:
                   dst = site / src.name
                   if dst.exists():
