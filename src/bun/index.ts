@@ -18,29 +18,40 @@ if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
 // A packaged stable build and an HTTPS release host are required for updates.
 let checkingForUpdate = false;
 async function checkForUpdates(manual = false): Promise<void> {
-  if (checkingForUpdate) return;
+  if (checkingForUpdate) {
+    if (manual) void Utils.showMessageBox({ title: APP_TITLE, message: "An update check is already running.", buttons: ["OK"] });
+    return;
+  }
   checkingForUpdate = true;
+  const explain = async (message: string, type: "info" | "error" = "info") => {
+    if (manual) await Utils.showMessageBox({ type, title: APP_TITLE, message, buttons: ["OK"] });
+    else console.log("[updater]", message);
+  };
   try {
     const local = await Updater.getLocalInfo();
     if (!local.baseUrl) {
-      if (manual) Utils.showNotification({ title: APP_TITLE, body: "Automatic updates are not configured for this build." });
+      await explain("Updates are not configured in this installation.", "error");
       return;
     }
     const result = await Updater.checkForUpdate();
-    if (!result.updateAvailable) {
-      if (manual) Utils.showNotification({ title: APP_TITLE, body: "You already have the latest published version." });
+    if (result.error) {
+      await explain("Unable to check the update server: " + result.error, "error");
       return;
     }
+    if (!result.updateAvailable) {
+      await explain("You are up to date (version " + APP_VERSION + ").");
+      return;
+    }
+    if (manual) await explain("Update " + result.version + " found. Downloading it now.");
     await Updater.downloadUpdate();
     if (Updater.updateInfo()?.updateReady) {
-      Utils.showNotification({
-        title: `${APP_TITLE} update ready`,
-        body: "An approved update is ready. Close and reopen the app to install it.",
-      });
+      await explain("Update downloaded. Quit and reopen the app to install it.");
+    } else {
+      await explain("Update download did not complete. Try again.", "error");
     }
   } catch (error) {
     console.error("Update check failed:", error);
-    if (manual) Utils.showNotification({ title: APP_TITLE, body: "Could not check for updates. Try again later." });
+    await explain("Update check failed: " + String(error), "error");
   } finally {
     checkingForUpdate = false;
   }
@@ -104,7 +115,6 @@ new BrowserWindow({
 ApplicationMenu.on("application-menu-clicked", (event) => {
   const action = (event as { data?: { action?: string } }).data?.action;
   if (action === "check-for-updates") {
-    Utils.showNotification({ title: APP_TITLE, body: "Checking for updates…" });
     void checkForUpdates(true);
   }
 });
