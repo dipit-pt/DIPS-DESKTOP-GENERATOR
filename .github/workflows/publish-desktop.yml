@@ -1,0 +1,106 @@
+name: DIPIT · Publish approved build
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_run_id:
+        description: "Successful Build (test only) workflow run ID to promote"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publish:
+    name: Promote the tested artifacts
+    runs-on: ubuntu-24.04
+    environment: production
+    steps:
+      - name: Validate source build and download exact artifacts
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          BUILD_RUN_ID: ${{ inputs.build_run_id }}
+        run: |
+          set -euo pipefail
+          [[ "$BUILD_RUN_ID" =~ ^[0-9]+$ ]] || { echo "Invalid run ID"; exit 1; }
+          gh api "repos/$GH_REPO/actions/runs/$BUILD_RUN_ID" > run.json
+          python3 - <<'PY'
+          import json, os
+          run = json.load(open("run.json"))
+          if run["status"] != "completed" or run["conclusion"] != "success":
+              raise SystemExit("Only completed successful builds can be promoted")
+          if run["name"] != "DIPIT · Build (test only)":
+              raise SystemExit("Run does not belong to the test-build workflow")
+          if run["head_repository"]["full_name"] != os.environ["GH_REPO"]:
+              raise SystemExit("Unexpected source repository")
+          PY
+          gh run download "$BUILD_RUN_ID" --repo "$GH_REPO" --dir downloaded
+          test -f downloaded/desktop-manifest/build-manifest.json
+
+      - name: Verify and package the tested files
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib, json, pathlib, re, shutil
+          root = pathlib.Path("downloaded")
+          manifest = json.loads((root / "desktop-manifest/build-manifest.json").read_text())
+          run_id = manifest["run_id"]
+          app_id = manifest["app_id"]
+          version = manifest["app_version"]
+          if not re.fullmatch(r"[a-zA-Z0-9.-]+", app_id) or not re.fullmatch(r"\d+\.\d+\.\d+", version):
+              raise SystemExit("Invalid manifest app identity or version")
+          expected = {item["target"] for item in manifest["platforms"]}
+          output = pathlib.Path("release-packages")
+          output.mkdir()
+          hashes = []
+          for target in sorted(expected):
+              folder = root / f"desktop-{target}-{run_id}"
+              if not folder.is_dir():
+                  raise SystemExit(f"Missing build artifact: {folder}")
+              files = [p for p in folder.rglob("*") if p.is_file()]
+              if target == "macos-arm64":
+                  matches = [p for p in files if p.name == "macos-arm64.zip"]
+              elif target == "windows-x64":
+                  matches = [p for p in files if p.name.endswith("-Setup.zip")]
+              elif target == "linux-x64":
+                  matches = [p for p in files if p.name.endswith(("-Setup.tar.gz", "-Setup.zip", ".AppImage", ".deb"))]
+              else:
+                  raise SystemExit(f"Unsupported target: {target}")
+              if len(matches) != 1:
+                  raise SystemExit(f"Expected one installer for {target}; found {matches}")
+              src = matches[0]
+              extension = ".tar.gz" if src.name.endswith(".tar.gz") else src.suffix
+              dest = output / f"{app_id}-v{version}-{target}{extension}"
+              shutil.copyfile(src, dest)
+              hashes.append(f"{hashlib.sha256(dest.read_bytes()).hexdigest()}  {dest.name}")
+          (output / "SHA256SUMS.txt").write_text("\n".join(hashes) + "\n")
+          pathlib.Path("release-notes.md").write_text(
+              f"## {manifest['app_name']}\n\n"
+              f"Version: {version}\n\nWebsite: {manifest['app_url']}\n\n"
+              f"Tested build: {run_id}\n\nGenerator commit: {manifest['commit']}\n\n"
+              "This is a manually approved release. Automatic update hosting requires separate configuration.\n"
+          )
+          pathlib.Path("release-tag.txt").write_text(f"{app_id}-v{version}-run{run_id}")
+          pathlib.Path("release-title.txt").write_text(f"{manifest['app_name']} | v{version}")
+          PY
+
+      - name: Publish approved GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          tag="$(cat release-tag.txt)"
+          gh release view "$tag" --repo "$GH_REPO" >/dev/null 2>&1 && { echo "Already published"; exit 1; }
+          gh release create "$tag" release-packages/* \
+            --repo "$GH_REPO" \
+            --target "${GITHUB_SHA}" \
+            --title "$(cat release-title.txt)" \
+            --notes-file release-notes.md \
+            --latest=false
