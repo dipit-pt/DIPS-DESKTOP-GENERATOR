@@ -172,7 +172,8 @@ jobs:
             if (!/^[a-zA-Z][a-zA-Z0-9]*(\.[a-zA-Z][a-zA-Z0-9-]*)+$/.test(process.env.APP_ID)) throw new Error("Invalid APP_ID");
             fs.writeFileSync("src/settings.ts",
               "export const APP_URL = " + JSON.stringify(url.toString()) + ";\n" +
-              "export const APP_TITLE = " + JSON.stringify(process.env.APP_NAME) + ";\n");
+              "export const APP_TITLE = " + JSON.stringify(process.env.APP_NAME) + ";\n" +
+              "export const APP_VERSION = " + JSON.stringify(process.env.APP_VERSION) + ";\n");
           '
 
       - name: Prepare optional application icon
