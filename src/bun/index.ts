@@ -6,7 +6,7 @@ import Electrobun, {
   Updater,
 } from "electrobun/main";
 import type { DesktopRPC } from "../notifications";
-import { APP_TITLE, APP_URL } from "../settings";
+import { APP_TITLE, APP_URL, APP_VERSION } from "../settings";
 
 const parsed = new URL(APP_URL);
 if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
@@ -60,29 +60,16 @@ async function resumePreparedUpdate(): Promise<void> {
   }
 }
 
-// Native edit roles supply clipboard actions and the standard keyboard shortcuts.
+// Keep all app-level actions in one native menu.
 ApplicationMenu.setApplicationMenu([
   {
     label: APP_TITLE,
-    submenu: [{ role: "quit", accelerator: "q" }],
-  },
-  {
-    label: "Updates",
     submenu: [
-      { label: "Check for Updates", action: "check-for-updates" },
-    ],
-  },
-  {
-    label: "Edit",
-    submenu: [
-      { role: "undo" },
-      { role: "redo" },
+      { label: `Version ${APP_VERSION}`, enabled: false },
       { type: "separator" },
-      { role: "cut" },
-      { role: "copy" },
-      { role: "paste" },
-      { role: "pasteAndMatchStyle" },
-      { role: "selectAll" },
+      { label: "Check for Updates", action: "check-for-updates" },
+      { type: "separator" },
+      { role: "quit", accelerator: "q" },
     ],
   },
 ]);
