@@ -85,6 +85,23 @@ jobs:
               f"Tested build: {run_id}\n\nGenerator commit: {manifest['commit']}\n\n"
               "This is a manually approved release. Automatic update hosting requires separate configuration.\n"
           )
+          # Preserve exactly the official Electrobun update artifacts, without renaming.
+          site = pathlib.Path("update-site") / "apps" / app_id
+          site.mkdir(parents=True, exist_ok=True)
+          for target in sorted(expected):
+              folder = root / f"desktop-{target}-{run_id}"
+              update_files = [p for p in folder.rglob("*") if p.is_file() and
+                  (p.name.endswith("-update.json") or p.name.endswith(".tar.zst") or p.name.endswith(".patch"))]
+              manifests = [p for p in update_files if p.name.startswith("stable-") and p.name.endswith("-update.json")]
+              if len(manifests) != 1:
+                  raise SystemExit(f"Missing Electrobun stable update JSON for {target}: {update_files}")
+              for src in update_files:
+                  dst = site / src.name
+                  if dst.exists():
+                      if hashlib.sha256(dst.read_bytes()).digest() != hashlib.sha256(src.read_bytes()).digest():
+                          raise SystemExit(f"Duplicate update artifact name with different contents: {src.name}")
+                  else:
+                      shutil.copyfile(src, dst)
           pathlib.Path("release-target.txt").write_text(manifest["commit"])
           pathlib.Path("release-tag.txt").write_text(f"{app_id}-v{version}-run{run_id}")
           pathlib.Path("release-title.txt").write_text(f"{manifest['app_name']} | v{version}")
@@ -105,3 +122,29 @@ jobs:
             --title "$(cat release-title.txt)" \
             --notes-file release-notes.md \
             --latest=false
+
+      - name: Publish approved update site to gh-pages
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git init -q site-repository
+          cd site-repository
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          if git ls-remote --exit-code --heads origin gh-pages > /dev/null; then
+            git fetch --depth=1 origin gh-pages
+            git checkout -B gh-pages FETCH_HEAD
+          else
+            git checkout --orphan gh-pages
+          fi
+          mkdir -p apps
+          cp -a ../update-site/apps/. apps/
+          touch .nojekyll
+          git add apps .nojekyll
+          if git diff --cached --quiet; then
+            echo "No new update files"
+            exit 0
+          fi
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -m "Publish approved updates from run ${{ inputs.build_run_id }}"
+          git push origin gh-pages
