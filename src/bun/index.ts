@@ -32,7 +32,7 @@ async function checkForUpdates(manual = false): Promise<void> {
       return;
     }
     await Updater.downloadUpdate();
-    if (Updater.updateInfo().updateReady) {
+    if (Updater.updateInfo()?.updateReady) {
       Utils.showNotification({
         title: `${APP_TITLE} update ready`,
         body: "An approved update is ready. Close and reopen the app to install it.",
@@ -69,7 +69,7 @@ ApplicationMenu.setApplicationMenu([
   {
     label: "Updates",
     submenu: [
-      { label: "Check for Updates", action: () => { void checkForUpdates(true); } },
+      { label: "Check for Updates", action: "check-for-updates" },
     ],
   },
   {
@@ -112,6 +112,11 @@ new BrowserWindow({
   preload: "views://preload/index.js",
   navigationRules: JSON.stringify(["^*", `${parsed.origin}/*`]),
   frame: { width: 1280, height: 850, x: 120, y: 80 },
+});
+
+ApplicationMenu.on("application-menu-clicked", (event) => {
+  const action = (event as { data?: { action?: string } }).data?.action;
+  if (action === "check-for-updates") void checkForUpdates(true);
 });
 
 // Start only after the window and application menu are initialized.
