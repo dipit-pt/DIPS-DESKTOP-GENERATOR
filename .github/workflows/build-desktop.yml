@@ -17,9 +17,10 @@ on:
         description: "Optional HTTPS logo image (square PNG/JPG/WebP)"
         required: false
         type: string
-      "Update URL":
-        description: "Optional stable HTTPS update base URL for this app"
-        required: false
+      "App Version":
+        description: "App release version (e.g. 1.0.1); increment for each approved update"
+        required: true
+        default: "1.0.0"
         type: string
       "x64":
         description: "windows"
@@ -79,6 +80,7 @@ jobs:
         shell: bash
         env:
           APP_URL: ${{ inputs['O URL que a aplicação vai abrir ao iniciar'] }}
+          DESKTOP_APP_VERSION: ${{ inputs['App Version'] }}
         run: |
           python3 - <<'PY'
           import ipaddress
@@ -100,7 +102,7 @@ jobs:
               raise SystemExit("Invalid domain name for application identifier")
           app_id = ".".join(reversed(labels))
           from pathlib import Path
-          version = Path("VERSION").read_text(encoding="utf-8").strip()
+          version = os.environ["DESKTOP_APP_VERSION"].strip()
           import re
           if not re.fullmatch(r"(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)", version):
               raise SystemExit("VERSION must contain a semantic version such as 1.1.0")
@@ -131,7 +133,7 @@ jobs:
           APP_VERSION: ${{ steps.identity.outputs.app_version }}
           PLATFORMS: ${{ steps.platforms.outputs.matrix }}
           APP_ICON_URL: ${{ inputs['Icon URL'] }}
-          UPDATE_BASE_URL: ${{ inputs['Update URL'] }}
+          UPDATE_BASE_URL: https://dipit-pt.github.io/DIPS-DESKTOP-GENERATOR/apps/${{ steps.identity.outputs.app_id }}
 
       - uses: actions/upload-artifact@v7
         with:
@@ -155,7 +157,7 @@ jobs:
       APP_VERSION: ${{ needs.prepare.outputs.app_version }}
       GENERATOR_SHA: ${{ github.sha }}
       APP_ICON_URL: ${{ inputs['Icon URL'] }}
-      UPDATE_BASE_URL: ${{ inputs['Update URL'] }}
+      UPDATE_BASE_URL: https://dipit-pt.github.io/DIPS-DESKTOP-GENERATOR/apps/${{ needs.prepare.outputs.app_id }}
     steps:
       - uses: actions/checkout@v7
 
