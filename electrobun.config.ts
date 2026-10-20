@@ -6,7 +6,7 @@ export default {
     identifier: process.env.APP_ID ?? "com.dipit.desktop",
     version: process.env.APP_VERSION ?? "1.0.0",
   },
-  ...(process.env.UPDATE_BASE_URL ? { release: { baseUrl: process.env.UPDATE_BASE_URL } } : {}),
+  ...(process.env.UPDATE_BASE_URL ? { release: { baseUrl: process.env.UPDATE_BASE_URL, generatePatch: false } } : {}),
   build: {
     mainProcess: "bun",
     ...(process.env.APP_ICON_URL ? {
