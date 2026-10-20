@@ -82,8 +82,13 @@ jobs:
         shell: bash
         run: |
           python3 -m venv .icon-venv
-          .icon-venv/bin/python -m pip install --quiet Pillow
-          .icon-venv/bin/python scripts/prepare-icon.py
+          if [ -f .icon-venv/Scripts/python.exe ]; then
+            PYTHON=.icon-venv/Scripts/python.exe
+          else
+            PYTHON=.icon-venv/bin/python
+          fi
+          "$PYTHON" -m pip install --quiet Pillow
+          "$PYTHON" scripts/prepare-icon.py
       - name: Hutch for macOS
         if: runner.os == 'macOS'
         run: |
