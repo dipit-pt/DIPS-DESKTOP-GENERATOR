@@ -102,6 +102,31 @@ jobs:
           print(f"App ID: {app_id}; version: {version}")
           PY
 
+      - name: Save build manifest
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, os
+          manifest = {key.lower(): os.environ[key] for key in ("APP_NAME", "APP_URL", "APP_ID", "APP_VERSION")}
+          manifest["commit"] = os.environ["GITHUB_SHA"]
+          manifest["run_id"] = os.environ["GITHUB_RUN_ID"]
+          manifest["platforms"] = json.loads(os.environ["PLATFORMS"])
+          with open("build-manifest.json", "w") as f:
+              json.dump(manifest, f, indent=2)
+          PY
+        env:
+          APP_NAME: ${{ inputs['O nome que vai aparecer na aplicação'] }}
+          APP_URL: ${{ inputs['O URL que a aplicação vai abrir ao iniciar'] }}
+          APP_ID: ${{ steps.identity.outputs.app_id }}
+          APP_VERSION: ${{ steps.identity.outputs.app_version }}
+          PLATFORMS: ${{ steps.platforms.outputs.matrix }}
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: desktop-manifest
+          path: build-manifest.json
+          retention-days: 30
+
   build:
     permissions:
       contents: read
