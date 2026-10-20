@@ -1,4 +1,4 @@
-import Electrobun, {
+import {
   ApplicationMenu,
   BrowserView,
   BrowserWindow,
@@ -101,9 +101,12 @@ new BrowserWindow({
   frame: { width: 1280, height: 850, x: 120, y: 80 },
 });
 
-Electrobun.events.on("application-menu-clicked", (event) => {
+ApplicationMenu.on("application-menu-clicked", (event) => {
   const action = (event as { data?: { action?: string } }).data?.action;
-  if (action === "check-for-updates") void checkForUpdates(true);
+  if (action === "check-for-updates") {
+    Utils.showNotification({ title: APP_TITLE, body: "Checking for updates…" });
+    void checkForUpdates(true);
+  }
 });
 
 // Start only after the window and application menu are initialized.
