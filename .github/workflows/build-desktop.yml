@@ -259,6 +259,6 @@ jobs:
           path: |
             ${{ runner.os == 'macOS' && 'release-ready/macos-arm64.zip' || 'build/**' }}
             ${{ runner.os != 'macOS' && 'dist/**' || '' }}
-            ${{ runner.os != 'macOS' && 'artifacts/**' || '' }}
+            artifacts/**
           if-no-files-found: error
           retention-days: 30
