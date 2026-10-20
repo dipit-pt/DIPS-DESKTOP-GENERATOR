@@ -1,110 +1,62 @@
-name: DIPIT · Desktop Generator
-run-name: "${{ inputs['O nome que vai aparecer na aplicação'] }} · #${{ github.run_number }} · ${{ inputs['x64'] && 'Windows ' || '' }}${{ inputs['arm64'] && 'macOS ' || '' }}${{ inputs['amd64'] && 'Linux' || '' }}"
-
+name: DIPIT Desktop Apps
 on:
   workflow_dispatch:
     inputs:
-      "O nome que vai aparecer na aplicação":
-        description: "Nome"
-        required: true
-        type: string
-      "O URL que a aplicação vai abrir ao iniciar":
-        description: "Endereço"
-        required: true
-        type: string
-        default: "https://"
-      "x64":
-        description: "windows"
-        type: boolean
-        default: true
-      "arm64":
-        description: "macOS"
-        type: boolean
-        default: true
-      "amd64":
-        description: "linux"
-        type: boolean
-        default: false
-
+      name: {description: Nome, required: true, type: string}
+      url: {description: Endereco URL, required: true, type: string}
+      image: {description: Endereco Imagem, required: false, type: string}
+  push:
+    branches: [main]
 permissions:
-  contents: read
-
+  contents: write
+concurrency:
+  group: desktop-apps
+  cancel-in-progress: false
 jobs:
   prepare:
-    permissions:
-      contents: read
-    name: Resolve application identity
     runs-on: ubuntu-24.04
     outputs:
-      app_id: ${{ steps.identity.outputs.app_id }}
-      app_version: ${{ steps.identity.outputs.app_version }}
-      matrix: ${{ steps.platforms.outputs.matrix }}
+      matrix: ${{ steps.register.outputs.matrix }}
     steps:
-      - name: Resolve selected platforms
-        id: platforms
-        shell: bash
+      - uses: actions/checkout@v4
+      - name: Register apps
+        id: register
         env:
-          WINDOWS: ${{ inputs['x64'] }}
-          MACOS: ${{ inputs['arm64'] }}
-          LINUX: ${{ inputs['amd64'] }}
+          EVENT: ${{ github.event_name }}
+          NAME: ${{ inputs.name }}
+          URL: ${{ inputs.url }}
+          IMAGE: ${{ inputs.image }}
         run: |
           python3 - <<'PY'
-          import json, os
-          options = [
-              ("WINDOWS", "windows-latest", "windows-x64", "windows"),
-              ("MACOS", "macos-15", "macos-arm64", "macos"),
-              ("LINUX", "ubuntu-24.04", "linux-x64", "linux"),
-          ]
-          selected = [{"os": runner, "target": target, "platform": platform}
-                      for flag, runner, target, platform in options if os.environ[flag] == "true"]
-          if not selected:
-              raise SystemExit("Select at least one operating system")
-          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
-              output.write("matrix=" + json.dumps(selected, separators=(",", ":")) + "\n")
-          print("Selected:", ", ".join(x["platform"] for x in selected))
-          PY
-
-      - uses: actions/checkout@v7
-
-      - name: Derive identifier and generator version
-        id: identity
-        shell: bash
-        env:
-          APP_URL: ${{ inputs['O URL que a aplicação vai abrir ao iniciar'] }}
-        run: |
-          python3 - <<'PY'
-          import ipaddress
-          import os
+          import json,os,pathlib,re
           from urllib.parse import urlsplit
-
-          url = urlsplit(os.environ["APP_URL"])
-          if url.scheme not in ("http", "https") or not url.hostname:
-              raise SystemExit("Please enter a valid HTTP(S) URL")
-          host = url.hostname.lower().rstrip(".")
-          try:
-              ipaddress.ip_address(host)
-              raise SystemExit("Use a domain name rather than an IP address")
-          except ValueError as exc:
-              if str(exc) == "Use a domain name rather than an IP address":
-                  raise
-          labels = host.split(".")
-          if len(labels) < 2 or any(not label or not label.replace("-", "").isalnum() or label[0] == "-" or label[-1] == "-" for label in labels):
-              raise SystemExit("Invalid domain name for application identifier")
-          app_id = ".".join(reversed(labels))
-          from pathlib import Path
-          version = Path("VERSION").read_text(encoding="utf-8").strip()
-          import re
-          if not re.fullmatch(r"(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)", version):
-              raise SystemExit("VERSION must contain a semantic version such as 1.1.0")
-          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
-              output.write(f"app_id={app_id}\n")
-              output.write(f"app_version={version}\n")
-          print(f"App ID: {app_id}; version: {version}")
+          file=pathlib.Path('apps.json')
+          apps=json.loads(file.read_text()) if file.exists() else {}
+          if os.environ['EVENT']=='workflow_dispatch':
+              url=os.environ['URL'].strip()
+              hostname=urlsplit(url).hostname
+              if not hostname or not url.startswith('https://') or not re.fullmatch(r'[a-zA-Z0-9.-]+',hostname):
+                  raise SystemExit('HTTPS URL with hostname required')
+              app_id='.'.join(reversed(hostname.lower().split('.')))
+              apps[app_id]={'name':os.environ['NAME'],'url':url,'image':os.environ['IMAGE']}
+              file.write_text(json.dumps(apps,indent=2,ensure_ascii=False)+'\n')
+          runners=[('macos-15','macos-arm64'),('windows-latest','windows-x64'),('ubuntu-24.04','linux-x64')]
+          matrix=[{'id':id,**app,'os':runner,'target':target} for id,app in apps.items() for runner,target in runners]
+          if not matrix: raise SystemExit('Register an app first')
+          with open(os.environ['GITHUB_OUTPUT'],'a') as output:
+              output.write('matrix='+json.dumps(matrix,separators=(',',':'))+'\n')
           PY
-
+      - name: Save registry
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add apps.json
+          if ! git diff --cached --quiet; then
+            git commit -m 'Register desktop application'
+            git push
+          fi
   build:
-    permissions:
-      contents: read
     needs: prepare
     strategy:
       fail-fast: false
@@ -112,220 +64,112 @@ jobs:
         include: ${{ fromJSON(needs.prepare.outputs.matrix) }}
     runs-on: ${{ matrix.os }}
     env:
-      APP_NAME: ${{ inputs['O nome que vai aparecer na aplicação'] }}
-      APP_URL: ${{ inputs['O URL que a aplicação vai abrir ao iniciar'] }}
-      APP_ID: ${{ needs.prepare.outputs.app_id }}
-      APP_VERSION: ${{ needs.prepare.outputs.app_version }}
-      GENERATOR_SHA: ${{ github.sha }}
+      APP_NAME: ${{ matrix.name }}
+      APP_URL: ${{ matrix.url }}
+      APP_ICON_URL: ${{ matrix.image }}
+      APP_ID: ${{ matrix.id }}
+      APP_VERSION: 1.2.${{ github.run_number }}
+      UPDATE_BASE_URL: https://dipit-pt.github.io/DIPS-DESKTOP-GENERATOR/apps/${{ matrix.id }}
     steps:
-      - uses: actions/checkout@v7
-
-      - name: Generate build-specific settings
+      - uses: actions/checkout@v4
+      - name: App settings
         shell: bash
         run: |
-          node -e '
-            const fs = require("node:fs");
-            const url = new URL(process.env.APP_URL);
-            if (!["http:", "https:"].includes(url.protocol)) throw new Error("APP_URL must be HTTP(S)");
-            if (!process.env.APP_NAME.trim()) throw new Error("APP_NAME is required");
-            if (!/^[a-zA-Z][a-zA-Z0-9]*(\.[a-zA-Z][a-zA-Z0-9-]*)+$/.test(process.env.APP_ID)) throw new Error("Invalid APP_ID");
-            fs.writeFileSync("src/settings.ts",
-              "export const APP_URL = " + JSON.stringify(url.toString()) + ";\n" +
-              "export const APP_TITLE = " + JSON.stringify(process.env.APP_NAME) + ";\n");
-          '
-
-      - name: Install Hutch (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
+          node -e 'require("fs").writeFileSync("src/settings.ts",["APP_TITLE","APP_URL","APP_VERSION"].map(k=>"export const "+k+" = "+JSON.stringify(process.env[k])+";").join("\n"))'
+        env:
+          APP_TITLE: ${{ matrix.name }}
+      - name: Icon
+        shell: bash
         run: |
-          & ([scriptblock]::Create((irm https://hutch.blackboard.sh/hutch/install.ps1)))
-
-      - name: Add Hutch to PATH (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $hutchBin = Join-Path $HOME ".hutch\bin"
-          if (-not (Test-Path (Join-Path $hutchBin "hutch.exe"))) {
-            throw "Hutch executable not found in $hutchBin"
-          }
-          Add-Content -Path $env:GITHUB_PATH -Value $hutchBin
-
-      - name: Install Hutch (macOS)
+          python3 -m pip install --quiet Pillow
+          python3 scripts/prepare-icon.py
+      - name: Hutch for macOS
         if: runner.os == 'macOS'
-        shell: bash
         run: |
-          xcode-select -p
           brew install cmake
           curl -fsSL https://hutch.blackboard.sh/hutch/install.sh | sh
-
-      - name: Add Hutch to PATH (macOS)
-        if: runner.os == 'macOS'
-        shell: bash
-        run: |
           echo "$HOME/.hutch/bin" >> "$GITHUB_PATH"
-
-      - name: Install Hutch and desktop libraries (Linux)
+      - name: Hutch for Linux
         if: runner.os == 'Linux'
-        shell: bash
         run: |
           sudo apt-get update
           sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libnotify-bin
           curl -fsSL https://hutch.blackboard.sh/hutch/install.sh | sh
           echo "$HOME/.hutch/bin" >> "$GITHUB_PATH"
-
-      - name: Verify Hutch
-        shell: bash
+      - name: Hutch for Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
         run: |
-          command -v hutch
-          hutch --version
-
+          & ([scriptblock]::Create((irm https://hutch.blackboard.sh/hutch/install.ps1)))
+          Add-Content $env:GITHUB_PATH (Join-Path $HOME ".hutch\bin")
       - name: Build
         shell: bash
         run: hutch electrobun build --env=stable
-
-      - name: Sign, verify and package macOS app
+      - name: Mac download
         if: runner.os == 'macOS'
         shell: bash
         run: |
-          set -euo pipefail
           mkdir -p release-ready
-          app_path="$(find build dist artifacts -type d -name '*.app' -print -prune 2>/dev/null | head -n 1 || true)"
-          if [ -z "$app_path" ]; then
-            echo "::error::No macOS .app bundle found in build, dist or artifacts"
-            exit 1
-          fi
-          echo "Signing bundle: $app_path"
-          codesign --force --deep --sign - "$app_path"
-          codesign --verify --deep --strict --verbose=2 "$app_path"
-          ditto -c -k --sequesterRsrc --keepParent "$app_path" "release-ready/macos-arm64.zip"
-          mkdir -p verify-extracted
-          ditto -x -k "release-ready/macos-arm64.zip" verify-extracted
-          extracted="$(find verify-extracted -type d -name '*.app' -print -prune | head -n 1)"
-          test -n "$extracted"
-          codesign --verify --deep --strict --verbose=2 "$extracted"
-
-      - name: Upload output
-        uses: actions/upload-artifact@v7
+          app="$(find build -type d -name '*.app' -print -prune | head -n 1)"
+          codesign --force --deep --sign - "$app"
+          ditto -c -k --sequesterRsrc --keepParent "$app" release-ready/macos-arm64.zip
+      - uses: actions/upload-artifact@v4
         with:
-          name: desktop-${{ matrix.target }}-${{ github.run_id }}
+          name: desktop-${{ matrix.id }}-${{ matrix.target }}
           path: |
-            ${{ runner.os == 'macOS' && 'release-ready/macos-arm64.zip' || 'build/**' }}
-            ${{ runner.os != 'macOS' && 'dist/**' || '' }}
-            ${{ runner.os != 'macOS' && 'artifacts/**' || '' }}
+            release-ready/*.zip
+            artifacts/**
+            build/**/stable-*-update.json
+            build/**/*.tar.zst
+            build/**/*-Setup.zip
+            build/**/*-Setup.tar.gz
           if-no-files-found: error
-          retention-days: 7
-
+          retention-days: 30
   publish:
-    name: Publish named release
-    needs: [prepare, build]
-    if: ${{ success() }}
+    needs: [prepare,build]
     runs-on: ubuntu-24.04
-    permissions:
-      contents: write
-    env:
-      APP_NAME: ${{ inputs['O nome que vai aparecer na aplicação'] }}
-      APP_URL: ${{ inputs['O URL que a aplicação vai abrir ao iniciar'] }}
-      APP_ID: ${{ needs.prepare.outputs.app_id }}
-      APP_VERSION: ${{ needs.prepare.outputs.app_version }}
-      GH_TOKEN: ${{ github.token }}
     steps:
-      - name: Download Windows artifact
-        if: ${{ inputs['x64'] }}
-        uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@v4
         with:
-          name: desktop-windows-x64-${{ github.run_id }}
-          path: release-files/windows-x64
-
-      - name: Download macOS artifact
-        if: ${{ inputs['arm64'] }}
-        uses: actions/download-artifact@v8
-        with:
-          name: desktop-macos-arm64-${{ github.run_id }}
-          path: release-files/macos-arm64
-
-      - name: Download Linux artifact
-        if: ${{ inputs['amd64'] }}
-        uses: actions/download-artifact@v8
-        with:
-          name: desktop-linux-x64-${{ github.run_id }}
-          path: release-files/linux-x64
-
-      - name: Package downloads and write release notes
-        shell: bash
+          pattern: desktop-*
+          path: downloads
+      - name: Collect updates
         run: |
           python3 - <<'PY'
-          import os
-          import pathlib
-          import re
-          import zipfile
-
-          root = pathlib.Path("release-files")
-          archives = pathlib.Path("release-packages")
-          archives.mkdir(exist_ok=True)
-          folders = sorted(p for p in root.iterdir() if p.is_dir() and p.name in ("windows-x64", "macos-arm64", "linux-x64")) if root.exists() else []
-          if not folders:
-              raise SystemExit(f"No downloaded desktop artifacts in {root}; entries: {list(root.iterdir()) if root.exists() else 'missing directory'}")
-          slug = re.sub(r"[^a-z0-9-]+", "-", os.environ["APP_NAME"].lower()).strip("-") or "desktop-app"
-          for folder in folders:
-              platform = folder.name
-              if platform is None:
-                  raise SystemExit(f"Unknown artifact platform: {folder.name}")
-              files = [p for p in folder.rglob("*") if p.is_file()]
-              if not files:
-                  raise SystemExit(f"Empty artifact: {folder.name}")
-              archive = archives / f"{slug}-v{os.environ['APP_VERSION']}-{platform}.zip"
-              if platform == "macos-arm64":
-                  source = folder / "macos-arm64.zip"
-                  if not source.is_file():
-                      raise SystemExit(f"Missing macOS ditto archive in {folder.name}")
-                  import shutil
-                  shutil.copy2(source, archive)
-              elif platform == "windows-x64":
-                  # launcher.exe is an INSTALLER, not a portable app. It needs
-                  # the .installer payload next to it. Preserve Electrobun's
-                  # complete, already compressed setup package.
-                  installers = [p for p in files if p.name.endswith("-Setup.zip")]
-                  if len(installers) != 1:
-                      raise SystemExit(f"Expected exactly one Windows Setup.zip; found {installers}")
-                  import shutil
-                  shutil.copy2(installers[0], archive)
-              elif platform == "linux-x64":
-                  # Linux's launcher is also an installer; retain its payload.
-                  candidates = [p for p in files if p.name.endswith(("-Setup.tar.gz", "-Setup.zip", ".AppImage", ".deb"))]
-                  if len(candidates) != 1:
-                      raise SystemExit(f"Expected one Linux setup package; found {candidates}; files: {[str(p.relative_to(folder)) for p in files]}")
-                  import shutil
-                  source = candidates[0]
-                  if source.name.endswith(".tar.gz"):
-                      archive = archive.with_suffix(".tar.gz")
-                  elif source.suffix == ".deb":
-                      archive = archive.with_suffix(".deb")
-                  elif source.suffix == ".AppImage":
-                      archive = archive.with_suffix(".AppImage")
-                  shutil.copy2(source, archive)
-              else:
-                  raise SystemExit(f"Unsupported platform: {platform}")
-              print(f"Packaged {folder.name} -> {archive}")
-          pathlib.Path("release-notes.md").write_text(
-              f"## {os.environ['APP_NAME']}\n\n"
-              f"**Version:** `{os.environ['APP_VERSION']}`  \n"
-              f"**App ID:** `{os.environ['APP_ID']}`  \n"
-              f"**Website:** {os.environ['APP_URL']}  \n"
-              f"**Build:** #{os.environ['GITHUB_RUN_NUMBER']}\n\n"
-              "Download the archive for your operating system from **Assets** below.\n\n"
-              "> Builds may be unsigned. Verify them before external distribution.\n"
-          )
+          import pathlib,shutil
+          for folder in pathlib.Path('downloads').iterdir():
+              if not folder.is_dir(): continue
+              target=next((p for p in ('macos-arm64','windows-x64','linux-x64') if folder.name.endswith('-'+p)),None)
+              if not target: raise SystemExit('Unknown artifact: '+folder.name)
+              app_id=folder.name[len('desktop-'):-len(target)-1]
+              files=[p for p in folder.rglob('*') if p.is_file() and (p.name.endswith('-update.json') or p.name.endswith('.tar.zst'))]
+              if not any(p.name.endswith('-update.json') for p in files) or not any(p.name.endswith('.tar.zst') for p in files):
+                  raise SystemExit('Missing updater files: '+folder.name)
+              for file in files:
+                  output=pathlib.Path('site/apps')/app_id/file.name
+                  output.parent.mkdir(parents=True,exist_ok=True)
+                  if output.exists(): raise SystemExit('Duplicate artifact: '+str(output))
+                  shutil.copy2(file,output)
           PY
-
-      - name: Publish GitHub Release
-        shell: bash
+      - name: Publish GitHub Pages
         env:
-          GH_REPO: ${{ github.repository }}
-          BUILD_RUN: ${{ github.run_id }}
+          GH_TOKEN: ${{ github.token }}
         run: |
-          tag="${APP_ID}-v${APP_VERSION}-run${BUILD_RUN}"
-          gh release create "$tag" release-packages/*.zip \
-            --target "${GITHUB_SHA}" \
-            --title "${APP_NAME} | v${APP_VERSION}" \
-            --notes-file release-notes.md \
-            --latest=false
+          set -euo pipefail
+          git init -q published
+          cd published
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          if git ls-remote --exit-code --heads origin gh-pages >/dev/null; then
+            git fetch --depth=1 origin gh-pages
+            git checkout -B gh-pages FETCH_HEAD
+          else
+            git checkout --orphan gh-pages
+          fi
+          mkdir -p apps
+          cp -a ../site/apps/. apps/
+          touch .nojekyll
+          git add apps .nojekyll
+          if ! git diff --cached --quiet; then
+            git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -m "Publish desktop updates"
+            git push origin gh-pages
+          fi
