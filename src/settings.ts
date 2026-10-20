@@ -2,4 +2,4 @@
 // These defaults are only used when running the source locally.
 export const APP_URL = "https://example.com/";
 export const APP_TITLE = "Desktop App";
-export const APP_VERSION = "1.1.0";
+export const APP_VERSION = "1.0.0";
