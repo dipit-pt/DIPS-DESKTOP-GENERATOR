@@ -67,7 +67,7 @@ ApplicationMenu.setApplicationMenu([
     submenu: [
       { label: `Version ${APP_VERSION}`, enabled: false },
       { type: "separator" },
-      { label: "Check for Updates", action: "check-for-updates" },
+      { label: "Check for Updates…", action: "check-for-updates" },
       { type: "separator" },
       { role: "quit", accelerator: "q" },
     ],
