@@ -1,4 +1,4 @@
-name: DIPIT · Desktop Generator
+name: DIPIT · Build (test only)
 run-name: "${{ inputs['O nome que vai aparecer na aplicação'] }} · #${{ github.run_number }} · ${{ inputs['x64'] && 'Windows ' || '' }}${{ inputs['arm64'] && 'macOS ' || '' }}${{ inputs['amd64'] && 'Linux' || '' }}"
 
 on:
@@ -204,7 +204,7 @@ jobs:
           test -n "$extracted"
           codesign --verify --deep --strict --verbose=2 "$extracted"
 
-      - name: Upload output
+      - name: Upload test-only output
         uses: actions/upload-artifact@v7
         with:
           name: desktop-${{ matrix.target }}-${{ github.run_id }}
@@ -213,119 +213,4 @@ jobs:
             ${{ runner.os != 'macOS' && 'dist/**' || '' }}
             ${{ runner.os != 'macOS' && 'artifacts/**' || '' }}
           if-no-files-found: error
-          retention-days: 7
-
-  publish:
-    name: Publish named release
-    needs: [prepare, build]
-    if: ${{ success() }}
-    runs-on: ubuntu-24.04
-    permissions:
-      contents: write
-    env:
-      APP_NAME: ${{ inputs['O nome que vai aparecer na aplicação'] }}
-      APP_URL: ${{ inputs['O URL que a aplicação vai abrir ao iniciar'] }}
-      APP_ID: ${{ needs.prepare.outputs.app_id }}
-      APP_VERSION: ${{ needs.prepare.outputs.app_version }}
-      GH_TOKEN: ${{ github.token }}
-    steps:
-      - name: Download Windows artifact
-        if: ${{ inputs['x64'] }}
-        uses: actions/download-artifact@v8
-        with:
-          name: desktop-windows-x64-${{ github.run_id }}
-          path: release-files/windows-x64
-
-      - name: Download macOS artifact
-        if: ${{ inputs['arm64'] }}
-        uses: actions/download-artifact@v8
-        with:
-          name: desktop-macos-arm64-${{ github.run_id }}
-          path: release-files/macos-arm64
-
-      - name: Download Linux artifact
-        if: ${{ inputs['amd64'] }}
-        uses: actions/download-artifact@v8
-        with:
-          name: desktop-linux-x64-${{ github.run_id }}
-          path: release-files/linux-x64
-
-      - name: Package downloads and write release notes
-        shell: bash
-        run: |
-          python3 - <<'PY'
-          import os
-          import pathlib
-          import re
-          import zipfile
-
-          root = pathlib.Path("release-files")
-          archives = pathlib.Path("release-packages")
-          archives.mkdir(exist_ok=True)
-          folders = sorted(p for p in root.iterdir() if p.is_dir() and p.name in ("windows-x64", "macos-arm64", "linux-x64")) if root.exists() else []
-          if not folders:
-              raise SystemExit(f"No downloaded desktop artifacts in {root}; entries: {list(root.iterdir()) if root.exists() else 'missing directory'}")
-          slug = re.sub(r"[^a-z0-9-]+", "-", os.environ["APP_NAME"].lower()).strip("-") or "desktop-app"
-          for folder in folders:
-              platform = folder.name
-              if platform is None:
-                  raise SystemExit(f"Unknown artifact platform: {folder.name}")
-              files = [p for p in folder.rglob("*") if p.is_file()]
-              if not files:
-                  raise SystemExit(f"Empty artifact: {folder.name}")
-              archive = archives / f"{slug}-v{os.environ['APP_VERSION']}-{platform}.zip"
-              if platform == "macos-arm64":
-                  source = folder / "macos-arm64.zip"
-                  if not source.is_file():
-                      raise SystemExit(f"Missing macOS ditto archive in {folder.name}")
-                  import shutil
-                  shutil.copy2(source, archive)
-              elif platform == "windows-x64":
-                  # launcher.exe is an INSTALLER, not a portable app. It needs
-                  # the .installer payload next to it. Preserve Electrobun's
-                  # complete, already compressed setup package.
-                  installers = [p for p in files if p.name.endswith("-Setup.zip")]
-                  if len(installers) != 1:
-                      raise SystemExit(f"Expected exactly one Windows Setup.zip; found {installers}")
-                  import shutil
-                  shutil.copy2(installers[0], archive)
-              elif platform == "linux-x64":
-                  # Linux's launcher is also an installer; retain its payload.
-                  candidates = [p for p in files if p.name.endswith(("-Setup.tar.gz", "-Setup.zip", ".AppImage", ".deb"))]
-                  if len(candidates) != 1:
-                      raise SystemExit(f"Expected one Linux setup package; found {candidates}; files: {[str(p.relative_to(folder)) for p in files]}")
-                  import shutil
-                  source = candidates[0]
-                  if source.name.endswith(".tar.gz"):
-                      archive = archive.with_suffix(".tar.gz")
-                  elif source.suffix == ".deb":
-                      archive = archive.with_suffix(".deb")
-                  elif source.suffix == ".AppImage":
-                      archive = archive.with_suffix(".AppImage")
-                  shutil.copy2(source, archive)
-              else:
-                  raise SystemExit(f"Unsupported platform: {platform}")
-              print(f"Packaged {folder.name} -> {archive}")
-          pathlib.Path("release-notes.md").write_text(
-              f"## {os.environ['APP_NAME']}\n\n"
-              f"**Version:** `{os.environ['APP_VERSION']}`  \n"
-              f"**App ID:** `{os.environ['APP_ID']}`  \n"
-              f"**Website:** {os.environ['APP_URL']}  \n"
-              f"**Build:** #{os.environ['GITHUB_RUN_NUMBER']}\n\n"
-              "Download the archive for your operating system from **Assets** below.\n\n"
-              "> Builds may be unsigned. Verify them before external distribution.\n"
-          )
-          PY
-
-      - name: Publish GitHub Release
-        shell: bash
-        env:
-          GH_REPO: ${{ github.repository }}
-          BUILD_RUN: ${{ github.run_id }}
-        run: |
-          tag="${APP_ID}-v${APP_VERSION}-run${BUILD_RUN}"
-          gh release create "$tag" release-packages/*.zip \
-            --target "${GITHUB_SHA}" \
-            --title "${APP_NAME} | v${APP_VERSION}" \
-            --notes-file release-notes.md \
-            --latest=false
+          retention-days: 30
