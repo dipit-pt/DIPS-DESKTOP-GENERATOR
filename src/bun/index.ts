@@ -1,4 +1,4 @@
-import {
+import Electrobun, {
   ApplicationMenu,
   BrowserView,
   BrowserWindow,
@@ -114,7 +114,7 @@ new BrowserWindow({
   frame: { width: 1280, height: 850, x: 120, y: 80 },
 });
 
-ApplicationMenu.on("application-menu-clicked", (event) => {
+Electrobun.events.on("application-menu-clicked", (event) => {
   const action = (event as { data?: { action?: string } }).data?.action;
   if (action === "check-for-updates") void checkForUpdates(true);
 });
