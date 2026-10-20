@@ -85,6 +85,7 @@ jobs:
               f"Tested build: {run_id}\n\nGenerator commit: {manifest['commit']}\n\n"
               "This is a manually approved release. Automatic update hosting requires separate configuration.\n"
           )
+          pathlib.Path("release-target.txt").write_text(manifest["commit"])
           pathlib.Path("release-tag.txt").write_text(f"{app_id}-v{version}-run{run_id}")
           pathlib.Path("release-title.txt").write_text(f"{manifest['app_name']} | v{version}")
           PY
@@ -100,7 +101,7 @@ jobs:
           gh release view "$tag" --repo "$GH_REPO" >/dev/null 2>&1 && { echo "Already published"; exit 1; }
           gh release create "$tag" release-packages/* \
             --repo "$GH_REPO" \
-            --target "${GITHUB_SHA}" \
+            --target "$(cat release-target.txt)" \
             --title "$(cat release-title.txt)" \
             --notes-file release-notes.md \
             --latest=false
