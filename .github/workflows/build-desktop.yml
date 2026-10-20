@@ -13,6 +13,14 @@ on:
         required: true
         type: string
         default: "https://"
+      "Icon URL":
+        description: "Optional HTTPS logo image (square PNG/JPG/WebP)"
+        required: false
+        type: string
+      "Update URL":
+        description: "Optional stable HTTPS update base URL for this app"
+        required: false
+        type: string
       "x64":
         description: "windows"
         type: boolean
@@ -108,6 +116,8 @@ jobs:
           python3 - <<'PY'
           import json, os
           manifest = {key.lower(): os.environ[key] for key in ("APP_NAME", "APP_URL", "APP_ID", "APP_VERSION")}
+          manifest["icon_url"] = os.environ.get("APP_ICON_URL", "")
+          manifest["update_base_url"] = os.environ.get("UPDATE_BASE_URL", "")
           manifest["commit"] = os.environ["GITHUB_SHA"]
           manifest["run_id"] = os.environ["GITHUB_RUN_ID"]
           manifest["platforms"] = json.loads(os.environ["PLATFORMS"])
@@ -120,6 +130,8 @@ jobs:
           APP_ID: ${{ steps.identity.outputs.app_id }}
           APP_VERSION: ${{ steps.identity.outputs.app_version }}
           PLATFORMS: ${{ steps.platforms.outputs.matrix }}
+          APP_ICON_URL: ${{ inputs['Icon URL'] }}
+          UPDATE_BASE_URL: ${{ inputs['Update URL'] }}
 
       - uses: actions/upload-artifact@v7
         with:
@@ -142,6 +154,8 @@ jobs:
       APP_ID: ${{ needs.prepare.outputs.app_id }}
       APP_VERSION: ${{ needs.prepare.outputs.app_version }}
       GENERATOR_SHA: ${{ github.sha }}
+      APP_ICON_URL: ${{ inputs['Icon URL'] }}
+      UPDATE_BASE_URL: ${{ inputs['Update URL'] }}
     steps:
       - uses: actions/checkout@v7
 
@@ -158,6 +172,12 @@ jobs:
               "export const APP_URL = " + JSON.stringify(url.toString()) + ";\n" +
               "export const APP_TITLE = " + JSON.stringify(process.env.APP_NAME) + ";\n");
           '
+
+      - name: Prepare optional application icon
+        shell: bash
+        run: |
+          python3 -m pip install --disable-pip-version-check --quiet --break-system-packages Pillow
+          python3 scripts/prepare-icon.py
 
       - name: Install Hutch (Windows)
         if: runner.os == 'Windows'
