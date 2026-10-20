@@ -9,6 +9,11 @@ export default {
   ...(process.env.UPDATE_BASE_URL ? { release: { baseUrl: process.env.UPDATE_BASE_URL } } : {}),
   build: {
     mainProcess: "bun",
+    ...(process.env.APP_ICON_URL ? {
+      mac: { icons: "generated-icons/icon.iconset" },
+      win: { icon: "generated-icons/icon.ico" },
+      linux: { icon: "generated-icons/icon.png" },
+    } : {}),
     bun: { entrypoint: "src/bun/index.ts" },
     views: { preload: { entrypoint: "src/preload/index.ts" } },
   },
