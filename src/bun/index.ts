@@ -21,7 +21,7 @@ if (process.platform === "win32") {
         returns: FFIType.i32,
       },
     });
-    const id = Buffer.from(APP_ID + "\\0", "utf16le");
+    const id = Buffer.from(APP_ID + String.fromCharCode(0), "utf16le");
     const result = shell.symbols.SetCurrentProcessExplicitAppUserModelID(ptr(id));
     if (result !== 0) console.warn("Unable to set Windows AppUserModelID:", result);
     shell.close();
