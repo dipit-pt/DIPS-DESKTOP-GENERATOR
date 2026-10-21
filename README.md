@@ -2,68 +2,46 @@
 
 **One codebase. Every brand. Desktop builds on demand.**
 
-[![Desktop builds](https://github.com/dipit-pt/DIPS-DESKTOP-GENERATOR/actions/workflows/build-desktop.yml/badge.svg)](https://github.com/dipit-pt/DIPS-DESKTOP-GENERATOR/actions/workflows/build-desktop.yml) · [Browse releases](https://github.com/dipit-pt/DIPS-DESKTOP-GENERATOR/releases) · [Run a build](https://github.com/dipit-pt/DIPS-DESKTOP-GENERATOR/actions/workflows/build-desktop.yml)
+[![Desktop builds](https://github.com/dipit-pt/DIPS-DESKTOP-GENERATOR/actions/workflows/build-desktop.yml/badge.svg)](https://github.com/dipit-pt/DIPS-DESKTOP-GENERATOR/actions/workflows/build-desktop.yml) · [Run a build](https://github.com/dipit-pt/DIPS-DESKTOP-GENERATOR/actions/workflows/build-desktop.yml)
 
 Build lightweight Windows, macOS and Linux desktop wrappers for your web applications using **Electrobun**, **Hutch**, and **GitHub Actions**. No per-client branches, no hardcoded production URLs, and no manual source edits for each release.
 
 ## Quick start
 
-1. Open **Actions → DIPIT · Desktop Generator → Run workflow**.
-2. Select the **main** branch.
-3. Enter the **application name** and **website URL**, then tick **Windows**, **macOS**, and/or **Linux**. The app identifier is derived automatically from the hostname. All builds use the wrapper version in [`VERSION`](VERSION).
-4. Start the workflow. When both build and publish jobs succeed, find the named app under **Releases** on the right-hand side of the repository.
-5. Open the release and download the ZIP for your platform from **Assets**.
+1. Enable **Settings → Pages → Build and deployment → Source → GitHub Actions** once in this repository.
+2. Open **Actions → DIPIT Desktop Apps → Run workflow**, selecting `main`.
+3. Enter the application name (`name`), HTTPS website URL (`url`), and optional icon URL (`image`).
+4. The workflow saves the app in `apps.json` and builds macOS ARM64, Windows x64, and Linux x64.
+5. Download the app's platform artifact from the workflow run. The macOS artifact includes `release-ready/macos-arm64.zip`; updater bundles are published separately to Pages.
 
-| Input | Example | Purpose |
-| --- | --- | --- |
-| Nome | `FozConstroi Tarefas` | Application title and name |
-| Website | `https://tarefas.fozconstroi.com/` | URL opened by the wrapper |
-| Windows / macOS / Linux | Checkboxes | Select any combination of operating systems |
+The hostname becomes the app ID: `tarefas.fozconstroi.com` → `com.fozconstroi.tarefas`. Apps using the same hostname share an identity.
 
-> **Application identity:** The hostname is reversed into an app ID: `tarefas.fozconstroi.com` → `com.fozconstroi.tarefas`. Paths and ports are ignored. Apps using the same hostname share an ID; use separate hostnames for separately installable apps.
+## Automatic updates
 
-## Versioning: one wrapper version, many applications
-
-The version is the version of the **DIPS Desktop Generator wrapper code**, **not** the number of times an app was generated. It is stored in the root [`VERSION`](VERSION) file and follows semantic versioning (`MAJOR.MINOR.PATCH`).
-
-- **PATCH** (`1.0.0` → `1.0.1`): compatible fixes to the wrapper.
-- **MINOR** (`1.0.1` → `1.1.0`): new backwards-compatible wrapper features.
-- **MAJOR** (`1.1.0` → `2.0.0`): breaking changes.
-
-When wrapper code changes, update `VERSION` in the **same commit or pull request**. Ordinary app generation **does not** increment it. All apps generated from the same wrapper revision use the same version, e.g. `FozConstroi Tarefas | v1.1.0` and `ConfrioVo | v1.1.0`. Release tags additionally include the app ID and GitHub run ID so builds never collide. Release notes record the generator commit SHA to identify the exact source revision.
-
-> **Important:** Version bumps are intentionally explicit, not automatically inferred from every GitHub commit. This avoids version changes for README edits, workflow-only housekeeping, or failed builds. Update `VERSION` whenever the actual wrapper changes. The workflow reads the value and embeds it into the Electrobun application.
-
-
-## Build gallery: GitHub Releases
-
-Every successful manual build publishes a **named GitHub Release** with the application name, version, website URL, build number, and downloadable platform archives. This makes the repository's **Releases** sidebar your build catalog.
-
-**Example:** `FozConstroi Tarefas | v1.1.0`
-
-Release tags include the app identifier and workflow run ID to avoid collisions across builds. Downloads remain accessible from [Releases](https://github.com/dipit-pt/DIPS-DESKTOP-GENERATOR/releases).
-
-> Releases are created only after a successful build. If the repository's Actions token cannot publish releases, set **Settings → Actions → General → Workflow permissions** to **Read and write permissions** (subject to organization policy).
-
-## How it works
+Every push to `main` rebuilds all registered apps with version `1.2.<GitHub run number>`. The root `VERSION` file is not currently used by the workflow. A new version becomes available only after all builds, publishing, and Pages deployment succeed.
 
 ```text
-GitHub Actions inputs
-         |
-         +--> Derive reversed-domain ID + wrapper version from VERSION
-         |
-         +--> Generate src/settings.ts (build only)
-         |
-         +--> Electrobun config reads APP_NAME / APP_ID / APP_VERSION
-         |
-         +--> Hutch + Electrobun package the desktop app
-         |
-         +--> Upload CI artifacts
-         |
-         +--> Publish a named GitHub Release with download links
+Push to main → build every app/platform → collect update manifests and bundles
+             → save gh-pages copy → deploy GitHub Pages → verify public downloads
 ```
 
-The workflow generates `src/settings.ts` in the runner workspace. The generated file is **not committed**. Each workflow run starts from the same source branch.
+Update files are served from:
+
+```text
+https://dipit-pt.github.io/DIPS-DESKTOP-GENERATOR/apps/<app-id>/
+```
+
+The workflow explicitly deploys with `actions/deploy-pages`. Merely pushing the `gh-pages` branch with `GITHUB_TOKEN` does not trigger a Pages build. Enable the GitHub Actions Pages source before running this workflow; the standard workflow token cannot enable a missing Pages site. Public verification checks each platform's version and bundle accessibility after deployment.
+
+Apps check at startup and download new updates in the background. On the next launch, the app checks the feed to restore its prepared update state, then applies the update and relaunches. A fresh background download does not interrupt the current session. This startup path needs access to the update server.
+
+**Check for Updates…** displays server/download errors and offers **Restart Now** or **Later** once the update is ready. Selecting Later leaves it prepared for the next launch.
+
+### Recovering older installations
+
+Version 1.2.41 hides update-server failures in notifications and checks prepared state before restoring it from disk. Even after the feed is restored, its quit/reopen path cannot reliably install the download. Install a fixed build manually once: quit the app, download the new macOS ZIP from the successful Actions run, extract it, and replace the copy in Applications. Future updates then use the corrected flow.
+
+A `404` at `stable-macos-arm64-update.json` means the feed is not being served; a successful build alone does not prove publishing succeeded. Verify the deploy job and Pages configuration.
 
 ## Repository map
 
@@ -114,14 +92,14 @@ Linux also needs a desktop notification daemon and `notify-send` (`libnotify-bin
 
 - [ ] Verify the destination URL uses HTTPS.
 - [ ] Verify the hostname maps to the intended application identity.
-- [ ] Confirm the wrapper version in `VERSION` and bump it for wrapper changes.
+- [ ] Confirm the workflow version and successful Pages deployment.
 - [ ] Build for the desired operating systems.
 - [ ] Test installation, authentication, navigation, and external links.
 - [ ] Configure signing/notarization before distributing to end users.
 
 ## Notes
 
-- GitHub Releases contain **build outputs**, not signed production releases by default.
+- Workflow artifacts contain **build outputs**, not signed production releases by default.
 - Platform-specific builds run on their respective GitHub-hosted runners.
 - Do not commit generated installers, temporary build files, or credentials.
 - A single `main` branch is intended to serve all clients.

@@ -157,7 +157,9 @@ jobs:
                   if output.exists(): raise SystemExit('Duplicate artifact: '+str(output))
                   shutil.copy2(file,output)
           PY
-      - name: Publish GitHub Pages
+      # Keep a copy for inspection/recovery. A GITHUB_TOKEN push does not
+      # trigger a Pages build; the explicit deployment below serves the files.
+      - name: Save update branch
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -179,3 +181,51 @@ jobs:
             git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -m "Publish desktop updates"
             git push origin gh-pages
           fi
+      - name: Upload Pages site
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+  deploy:
+    needs: [prepare,publish]
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+      - name: Deploy updates
+        id: deployment
+        uses: actions/deploy-pages@v4
+      - name: Verify public update feeds and bundles
+        env:
+          MATRIX: ${{ needs.prepare.outputs.matrix }}
+          APP_VERSION: 1.2.${{ github.run_number }}
+        run: |
+          python3 - <<'PY'
+          import json,os,time
+          from urllib.parse import quote
+          from urllib.request import Request,urlopen
+          for app in json.loads(os.environ['MATRIX']):
+              base='https://dipit-pt.github.io/DIPS-DESKTOP-GENERATOR/apps/'+app['id']+'/'
+              manifest_url=base+'stable-'+app['target']+'-update.json'
+              for attempt in range(12):
+                  try:
+                      with urlopen(manifest_url+'?run='+os.environ['GITHUB_RUN_ID'],timeout=30) as response:
+                          manifest=json.load(response)
+                      if manifest['version']!=os.environ['APP_VERSION']:
+                          raise ValueError('Public feed still serves '+manifest['version'])
+                      if manifest['identifier']!=app['id']:
+                          raise ValueError('Unexpected app identifier')
+                      artifact=base+quote(manifest['artifact']['file'],safe='')
+                      with urlopen(Request(artifact,method='HEAD'),timeout=30) as response:
+                          if response.status!=200: raise ValueError('Bundle is unavailable')
+                      print('Verified',app['id'],app['target'],manifest['version'])
+                      break
+                  except Exception:
+                      if attempt==11: raise
+                      time.sleep(10)
+          PY
