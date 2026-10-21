@@ -20,7 +20,7 @@ const updates = createUpdateController(Updater, Utils.showMessageBox, APP_TITLE,
 // Keep all app-level actions in one native menu.
 ApplicationMenu.setApplicationMenu([
   {
-    label: APP_TITLE,
+    label: "Settings",
     submenu: [
       { label: `Version ${APP_VERSION}`, enabled: false },
       { type: "separator" },
