@@ -24,7 +24,7 @@ jobs:
           apps=json.load(open("apps.json"))
           matrix=[{"id":app_id,**app} for app_id,app in apps.items()]
           with open(os.environ["GITHUB_OUTPUT"],"a") as output:
-              output.write("matrix="+json.dumps(matrix,separators=(",",":"))+"\\n")
+              output.write("matrix="+json.dumps(matrix,separators=(",",":"))+"\n")
           PY
   windows:
     needs: prepare
@@ -44,7 +44,7 @@ jobs:
       - name: Generate app settings
         shell: bash
         run: |
-          node -e 'require("fs").writeFileSync("src/settings.ts",["APP_ID","APP_TITLE","APP_URL","APP_VERSION"].map(k=>"export const "+k+" = "+JSON.stringify(process.env[k==="APP_TITLE"?"APP_NAME":k])+";").join("\\n"))'
+          node -e 'require("fs").writeFileSync("src/settings.ts",["APP_ID","APP_TITLE","APP_URL","APP_VERSION"].map(k=>"export const "+k+" = "+JSON.stringify(process.env[k==="APP_TITLE"?"APP_NAME":k])+";").join("\n"))'
       - name: Generate icon
         shell: bash
         run: |
@@ -54,7 +54,7 @@ jobs:
         shell: pwsh
         run: |
           & ([scriptblock]::Create((irm https://hutch.blackboard.sh/hutch/install.ps1)))
-          Add-Content $env:GITHUB_PATH (Join-Path $HOME ".hutch\\bin")
+          Add-Content $env:GITHUB_PATH (Join-Path $HOME ".hutch\bin")
       - name: Build Windows
         shell: bash
         run: hutch electrobun build --env=stable
