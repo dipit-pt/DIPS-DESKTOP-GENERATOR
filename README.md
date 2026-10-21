@@ -88,7 +88,7 @@ if (window.multiDesktop) {
 
 ### Notification identity on Windows
 
-**Known limitation:** A Windows toast can show **Bun** as the sender and a generic icon, even when the generated window and installer use the app name and icon. The `APP_NAME`, `APP_ID`, and `APP_ICON_URL` build inputs do not, by themselves, guarantee that Windows toast notifications use that identity. This requires Windows-specific notification registration / app identity integration and verification on a real installed build (including the Windows AppUserModelID and shortcut/notification activation behavior as applicable). Do not report branded Windows notifications as working until verified.
+The wrapper sets the current Windows process AppUserModelID to the generated app ID before window creation. This is an experimental step toward matching the taskbar/runtime identity; it does **not** install a matching Start Menu shortcut or guarantee notification sender branding. Verify on Windows before treating it as a fix.\n\n**Known limitation:** A Windows toast can show **Bun** as the sender and a generic icon, even when the generated window and installer use the app name and icon. The `APP_NAME`, `APP_ID`, and `APP_ICON_URL` build inputs do not, by themselves, guarantee that Windows toast notifications use that identity. This requires Windows-specific notification registration / app identity integration and verification on a real installed build (including the Windows AppUserModelID and shortcut/notification activation behavior as applicable). Do not report branded Windows notifications as working until verified.
 
 **Desired example for A+ Tarefas:**
 
