@@ -1,0 +1,72 @@
+name: Windows desktop test
+on:
+  pull_request:
+    paths:
+      - "src/**"
+      - "electrobun.config.ts"
+      - "hutch.config.ts"
+      - "scripts/**"
+      - ".github/workflows/windows-test.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.apps.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: apps
+        run: |
+          python3 - <<'PY'
+          import json,os
+          apps=json.load(open("apps.json"))
+          matrix=[{"id":app_id,**app} for app_id,app in apps.items()]
+          with open(os.environ["GITHUB_OUTPUT"],"a") as output:
+              output.write("matrix="+json.dumps(matrix,separators=(",",":"))+"\n")
+          PY
+  windows:
+    needs: prepare
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.prepare.outputs.matrix) }}
+    env:
+      APP_NAME: ${{ matrix.name }}
+      APP_ID: ${{ matrix.id }}
+      APP_URL: ${{ matrix.url }}
+      APP_ICON_URL: ${{ matrix.image }}
+      APP_VERSION: 1.2.${{ github.run_number }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generate app settings
+        shell: bash
+        run: |
+          node -e 'require("fs").writeFileSync("src/settings.ts",["APP_ID","APP_TITLE","APP_URL","APP_VERSION"].map(k=>"export const "+k+" = "+JSON.stringify(process.env[k==="APP_TITLE"?"APP_NAME":k])+";").join("\n"))'
+      - name: Generate icon
+        shell: bash
+        run: |
+          python -m pip install --quiet Pillow
+          python scripts/prepare-icon.py
+      - name: Install Hutch
+        shell: pwsh
+        run: |
+          & ([scriptblock]::Create((irm https://hutch.blackboard.sh/hutch/install.ps1)))
+          Add-Content $env:GITHUB_PATH (Join-Path $HOME ".hutch\bin")
+      - name: Build Windows
+        shell: bash
+        run: hutch electrobun build --env=stable
+      - name: Upload Windows test app
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-test-${{ matrix.id }}
+          path: |
+            artifacts/**
+            build/**/*-Setup.zip
+            build/**/*-Setup.tar.gz
+            build/**/launcher.exe
+            build/**/bun.exe
+          if-no-files-found: error
+          retention-days: 14

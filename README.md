@@ -65,22 +65,41 @@ hutch electrobun dev --watch
 
 For local testing, edit `src/settings.ts` or generate it yourself. The workflow replaces it for CI builds.
 
+## Application chrome and desktop menu
+
+The native window title uses the generated app's `APP_TITLE` (for example, **A+ Tarefas**). The hosted web application controls its own header and toolbar. To avoid showing the same name in both locations, the native application menu is labeled **Settings** and contains the desktop-specific **Version**, **Check for Updates…**, and **Quit** actions. This is a menu, not a new web settings page. If the website also renders its own title/header, adjust that website separately.
+
 ## Native editing
 
 Generated apps include a native **Edit** menu for undo, redo, cut, copy, paste, paste and match style, and select all. On macOS these roles enable the standard Command shortcuts in the focused webview field. Windows/Linux keep their native webview editing behaviour; platform menu-role support varies. Clipboard contents are not exposed through the notification bridge.
 
 ## Native notifications
 
-Generated apps expose `window.multiDesktop.notify({ title, body })` to the configured website's top-level page. The website calls this when it receives a new notification; the launcher displays it through [Electrobun Utils.showNotification](https://framework.blackboard.sh/electrobun/apis/utils/#notifications).
+Generated apps expose `window.multiDesktop.notify({ title, body })` to the configured website's top-level page. The website calls this when it receives a new notification; the launcher displays it through [Electrobun Utils.showNotification](https://framework.blackboard.sh/electrobun/apis/utils/#notifications). The website supplies the **notification title** (such as the task name) and **body**, while the operating system decides the **sender name and icon**. The native wrapper does not add a `MULTI —` prefix.
 
 ```js
 if (window.multiDesktop) {
   await window.multiDesktop.notify({
-    title: "New notification",
+    title: "Notificação de teste",
     body: "A task was updated.",
   });
 }
 ```
+
+### Notification identity on Windows
+
+The wrapper sets the current Windows process AppUserModelID to the generated app ID before window creation. This is an experimental step toward matching the taskbar/runtime identity; it does **not** install a matching Start Menu shortcut or guarantee notification sender branding. Verify on Windows before treating it as a fix.\n\n**Known limitation:** A Windows toast can show **Bun** as the sender and a generic icon, even when the generated window and installer use the app name and icon. The `APP_NAME`, `APP_ID`, and `APP_ICON_URL` build inputs do not, by themselves, guarantee that Windows toast notifications use that identity. This requires Windows-specific notification registration / app identity integration and verification on a real installed build (including the Windows AppUserModelID and shortcut/notification activation behavior as applicable). Do not report branded Windows notifications as working until verified.
+
+**Desired example for A+ Tarefas:**
+
+- Windows sender name: `A+ Tarefas`
+- Windows sender icon: the generated A+ Tarefas application icon
+- Notification title: `Notificação de teste` (or the actual task title), **not** `MULTI — Notificação de teste`
+- Notification body: provided by the hosted website
+
+The wrapper currently forwards the received title unchanged. If a toast title contains `MULTI —`, fix the website's notification payload at its source instead of hardcoding one client's prefix into this shared generator.
+
+**Windows verification:** generate an app with `name=A+ Tarefas` and an HTTPS icon image; install and launch it normally, send a test notification through `window.multiDesktop.notify`, then inspect the notification popup and Windows Notification Center. Check sender name, icon, title/body, click behavior, and whether the result persists after reinstall/restart. Repeat with a second brand to catch hardcoded names.
 
 The bridge is restricted to the configured origin. The window keeps navigation on that origin; external login redirects must be reviewed before using this template. It exposes no filesystem or command API. Text is bounded at the native handler.
 
@@ -95,6 +114,8 @@ Linux also needs a desktop notification daemon and `notify-send` (`libnotify-bin
 - [ ] Confirm the workflow version and successful Pages deployment.
 - [ ] Build for the desired operating systems.
 - [ ] Test installation, authentication, navigation, and external links.
+- [ ] Check native title-bar versus hosted website header duplication.
+- [ ] Test OS notifications on each target platform; on Windows verify sender name/icon and unprefixed task title.
 - [ ] Configure signing/notarization before distributing to end users.
 
 ## Notes

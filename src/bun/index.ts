@@ -1,3 +1,4 @@
+import { dlopen, FFIType, ptr } from "bun:ffi";
 import {
   ApplicationMenu,
   BrowserView,
@@ -7,7 +8,27 @@ import {
 } from "electrobun/main";
 import { createUpdateController } from "../updater";
 import type { DesktopRPC } from "../notifications";
-import { APP_TITLE, APP_URL, APP_VERSION } from "../settings";
+import { APP_ID, APP_TITLE, APP_URL, APP_VERSION } from "../settings";
+
+// Windows associates windows/taskbar entries with the process AppUserModelID.
+// Set this before creating the first native window. Windows toast attribution
+// still depends on an installed Start Menu shortcut with the same ID.
+if (process.platform === "win32") {
+  try {
+    const shell = dlopen("shell32.dll", {
+      SetCurrentProcessExplicitAppUserModelID: {
+        args: [FFIType.ptr],
+        returns: FFIType.i32,
+      },
+    });
+    const id = Buffer.from(APP_ID + String.fromCharCode(0), "utf16le");
+    const result = shell.symbols.SetCurrentProcessExplicitAppUserModelID(ptr(id));
+    if (result !== 0) console.warn("Unable to set Windows AppUserModelID:", result);
+    shell.close();
+  } catch (error) {
+    console.warn("Windows AppUserModelID initialization failed:", error);
+  }
+}
 
 const parsed = new URL(APP_URL);
 if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
@@ -20,7 +41,7 @@ const updates = createUpdateController(Updater, Utils.showMessageBox, APP_TITLE,
 // Keep all app-level actions in one native menu.
 ApplicationMenu.setApplicationMenu([
   {
-    label: APP_TITLE,
+    label: "Settings",
     submenu: [
       { label: `Version ${APP_VERSION}`, enabled: false },
       { type: "separator" },
