@@ -211,7 +211,9 @@ jobs:
           from urllib.request import Request,urlopen
           for app in json.loads(os.environ['MATRIX']):
               base='https://dipit-pt.github.io/DIPS-DESKTOP-GENERATOR/apps/'+app['id']+'/'
-              manifest_url=base+'stable-'+app['target']+'-update.json'
+              # Matrix labels use "windows"; Electrobun's update protocol uses "win".
+              update_target=app['target'].replace('windows-','win-',1)
+              manifest_url=base+'stable-'+update_target+'-update.json'
               for attempt in range(12):
                   try:
                       with urlopen(manifest_url+'?run='+os.environ['GITHUB_RUN_ID'],timeout=30) as response:
@@ -225,7 +227,8 @@ jobs:
                           if response.status!=200: raise ValueError('Bundle is unavailable')
                       print('Verified',app['id'],app['target'],manifest['version'])
                       break
-                  except Exception:
+                  except Exception as error:
+                      print('Verification failed:',manifest_url,'attempt',attempt+1,str(error),flush=True)
                       if attempt==11: raise
                       time.sleep(10)
           PY
