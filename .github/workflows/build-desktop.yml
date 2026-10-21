@@ -75,7 +75,7 @@ jobs:
       - name: App settings
         shell: bash
         run: |
-          node -e 'require("fs").writeFileSync("src/settings.ts",["APP_TITLE","APP_URL","APP_VERSION"].map(k=>"export const "+k+" = "+JSON.stringify(process.env[k])+";").join("\n"))'
+          node -e 'require("fs").writeFileSync("src/settings.ts",["APP_ID","APP_TITLE","APP_URL","APP_VERSION"].map(k=>"export const "+k+" = "+JSON.stringify(process.env[k])+";").join("\n"))'
         env:
           APP_TITLE: ${{ matrix.name }}
       - name: Icon
