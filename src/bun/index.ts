@@ -49,13 +49,42 @@ const rpc = BrowserView.defineRPC<DesktopRPC>({
   },
 });
 
-new BrowserWindow({
+const mainWindow = new BrowserWindow({
   title: APP_TITLE,
   url: parsed.toString(),
   rpc,
   preload: "views://preload/index.js",
-  navigationRules: JSON.stringify(["^*", `${parsed.origin}/*`]),
+  // Authenticated file downloads and generated exports use object URLs.
+  navigationRules: JSON.stringify(["^*", `${parsed.origin}/*`, `blob:${parsed.origin}/*`]),
   frame: { width: 1280, height: 850, x: 120, y: 80 },
+});
+
+function downloadDetails(event: unknown): { filename?: string; path?: string; error?: string } {
+  const detail = (event as { data?: { detail?: unknown } }).data?.detail;
+  if (detail && typeof detail === "object") return detail;
+  if (typeof detail === "string") {
+    try { return JSON.parse(detail); } catch { /* Older runtimes may send plain text. */ }
+  }
+  return {};
+}
+
+mainWindow.webview.on("download-completed", (event) => {
+  const { filename, path } = downloadDetails(event);
+  console.log("[download] Saved", path ?? filename);
+  Utils.showNotification({
+    title: "Download complete",
+    body: path ?? filename ?? "Your file was saved to Downloads.",
+  });
+});
+
+mainWindow.webview.on("download-failed", (event) => {
+  const { filename, error } = downloadDetails(event);
+  console.error("[download] Failed", filename, error);
+  void Utils.showMessageBox({
+    type: "error", title: APP_TITLE,
+    message: "Could not download " + (filename || "the file") + ".",
+    detail: error || "Please try again.", buttons: ["OK"],
+  });
 });
 
 ApplicationMenu.on("application-menu-clicked", (event) => {

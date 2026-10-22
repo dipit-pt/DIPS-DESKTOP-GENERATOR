@@ -69,6 +69,10 @@ For local testing, edit `src/settings.ts` or generate it yourself. The workflow 
 
 Generated apps include a native **Edit** menu for undo, redo, cut, copy, paste, paste and match style, and select all. On macOS these roles enable the standard Command shortcuts in the focused webview field. Windows/Linux keep their native webview editing behaviour; platform menu-role support varies. Clipboard contents are not exposed through the notification bridge.
 
+## File downloads
+
+The wrapper allows same-origin web URLs and `blob:` URLs created by the configured website, including authenticated file downloads and generated exports. The native webview handles saving files (macOS saves to Downloads). Completed downloads show a native notification; failures show an error dialog. Other websites remain blocked by the navigation policy. Install a new wrapper build to receive this change.
+
 ## Native notifications
 
 Generated apps expose `window.multiDesktop.notify({ title, body })` to the configured website's top-level page. The website calls this when it receives a new notification; the launcher displays it through [Electrobun Utils.showNotification](https://framework.blackboard.sh/electrobun/apis/utils/#notifications).
