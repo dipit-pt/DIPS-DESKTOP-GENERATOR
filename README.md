@@ -71,7 +71,9 @@ Generated apps include a native **Edit** menu for undo, redo, cut, copy, paste, 
 
 ## File downloads
 
-The wrapper allows same-origin web URLs and `blob:` URLs created by the configured website, including authenticated file downloads and generated exports. The native webview handles saving files (macOS saves to Downloads). Completed downloads show a native notification; failures show an error dialog. Other websites remain blocked by the navigation policy. Install a new wrapper build to receive this change.
+The wrapper allows HTTP(S), `blob:`, and `data:` navigation for downloads, generated exports, and login redirects. The native webview handles saving files (macOS saves to Downloads). Completed downloads show a system notification and an in-app notification with **Open File**, **Show in Folder**, and **Dismiss** actions. The in-app actions use native-issued download IDs; the website cannot supply a filesystem path. The pinned Electrobun native notification API has no click callback, so opening a download is handled by the in-app notification. Failures show an error dialog. New-window links to the configured website reuse the authenticated webview; external HTTP(S), email, and telephone links open in their default application. The View menu provides reload, back/forward, Open Downloads Folder, and Open in Browser. Notification and completed-download RPC are exposed only on the configured origin.
+
+Install a new wrapper build to receive native changes; updating the website cannot change an already installed wrapper. The website can also disable its own download button while fetching a file; a forbidden cursor during that request is not an OS permission indicator.
 
 ## Native notifications
 
@@ -86,7 +88,7 @@ if (window.multiDesktop) {
 }
 ```
 
-The bridge is restricted to the configured origin. The window keeps navigation on that origin; external login redirects must be reviewed before using this template. It exposes no filesystem or command API. Text is bounded at the native handler.
+The bridge is restricted to the configured origin. The window keeps navigation on that origin; external login redirects must be reviewed before using this template. It exposes no arbitrary filesystem or command API; download actions are restricted to files reported complete by the native webview. Text is bounded at the native handler.
 
 The website owns delivery/realtime and the user's device preference. This is not a background push subscription: the desktop app must stay running, including minimized. A successful call means the native request was accepted; OS permissions and Focus/Do Not Disturb can still suppress display. Existing installations need a new generated build; updating the website alone cannot add the bridge.
 
